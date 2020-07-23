@@ -53,14 +53,14 @@ instance Print JsonObj where
       JsonObjArray array ->
         concatD [doc (showString "["), prt 0 array, doc (showString "]")]
 
-instance Print Pair where
-  prt i e =
-    case e of
-      JsonPair str value -> concatD [prt 0 str, doc (showString ": "), prt 0 value]
+
+instance Print (String,JsonValue) where
+  prt i (str,value) = concatD [prt 0 str, doc (showString ": "), prt 0 value]
   prtList _ [] = id
   prtList i (x:xs) = foldl compose (prt i x) xs
     where
       compose acc x = acc . concatD [doc $ showString ",", prt i x]
+
 
 instance Print JsonValue where
   prt i e =

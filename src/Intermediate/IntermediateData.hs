@@ -152,8 +152,8 @@ drawJsonObj x1 x2 y obj separator = do
   zipWithSeparator [e     ] = [(e, "")]
   zipWithSeparator (e : es) = (e, ",") : zipWithSeparator es
 
-drawJsonPair :: Font a => ObjectScope -> String -> Pair -> IntermediateT a ((Height, Width), TextContent)
-drawJsonPair coords@ObjectScope {..} pairSeparator j@(JsonPair key jsonValue) = do
+drawJsonPair :: Font a => ObjectScope -> String -> (String, JsonValue) -> IntermediateT a ((Height, Width), TextContent)
+drawJsonPair coords@ObjectScope {..} pairSeparator (key, jsonValue) = do
   currentFont <- gets font
   let separatorCharSize = getStringSize currentFont separator
       txt               = wrapInQuote key

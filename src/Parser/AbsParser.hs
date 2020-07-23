@@ -18,6 +18,7 @@ import           Control.Monad                  ( guard
                                                 )
 import           Data.Char                      ( isSpace )
 import qualified Data.Map                      as M
+import qualified Data.Set                      as S
 import qualified Data.List                     as L
 import           Debug.Trace
 import           Flow
@@ -129,7 +130,15 @@ parseTillDelimiter s p = f
             v <- f
             return (c : v)
 
-
+foldlP :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m d -> (a -> c -> c) -> c -> ParsecT s u m c
+foldlP p op f x = foldPAux p op f x <|> return x
+ where
+  foldPAux p op f x = do
+    v   <- p
+    sep <- optionMaybe <| op
+    case sep of
+      Nothing -> return <| f v x
+      _       -> foldlP p op f (f v x)
 
 parseString :: String -> Maybe String -> IO (Either AbsFlow.Error (EntityTable, Diagram Info))
 parseString str scope = first parseError <$> runParserT whileParser emptyState "" str
@@ -514,10 +523,11 @@ json = parseJsonObj <|> parseArray
   parseJsonObj = do
     try <| string "{"
     whiteSpace
-    j <- sepBy pair (try separator)
+    (j, _) <- foldlP pair (try separator) f (id, S.empty)
     whiteSpace
     string "}"
-    return (JsonObjObject j)
+    return (JsonObjObject <| j [])
+    where f v@(key, _) (acc, mem) = if S.member key mem then (acc, mem) else (acc . (v :), S.insert key mem)
 
 float = rd <$> (plus <|> minus <|> number)
  where
@@ -538,14 +548,14 @@ bool =
           string "false"
           return False
 
-pair :: FlowParser Pair
+pair :: FlowParser (String, JsonValue)
 pair = do
   whiteSpace
   p <- quotedString
   whiteSpace
   string ":"
   whiteSpace
-  JsonPair p <$> jsonValue
+  (p, ) <$> jsonValue
 
 jsonValue :: FlowParser JsonValue
 jsonValue =

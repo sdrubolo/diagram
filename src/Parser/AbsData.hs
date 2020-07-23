@@ -25,14 +25,10 @@ data Assignment
   deriving (Eq, Ord, Show)
 
 data JsonObj
-  = JsonObjObject [Pair]
+  = JsonObjObject [(String,JsonValue)]
   | JsonObjArray [JsonValue]
   deriving (Eq, Ord, Show)
 
-data Pair =
-  JsonPair String
-           JsonValue
-  deriving (Eq, Ord, Show)
 
 data JsonValue
   = JsonString String
