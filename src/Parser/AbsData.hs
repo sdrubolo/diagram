@@ -3,7 +3,7 @@ module AbsData where
 import           Data.Char
 
 data RequestData
-  = Json JsonObj
+  = Json JsonValue
   | Form [Assignment]
   deriving (Eq, Ord, Show)
 
@@ -24,15 +24,10 @@ data Assignment
                    Identifier
   deriving (Eq, Ord, Show)
 
-data JsonObj
-  = JsonObjObject [(String,JsonValue)]
-  | JsonObjArray [JsonValue]
-  deriving (Eq, Ord, Show)
-
-
 data JsonValue
   = JsonString String
-  | JsonObject JsonObj
+  | JsonObject [(String,JsonValue)]
+  | JsonArray [JsonValue]
   | JsonInteger Integer
   | JsonBoolean Bool
   | JsonNullTk

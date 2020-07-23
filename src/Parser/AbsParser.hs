@@ -434,7 +434,7 @@ requestData =
     Form <$> (whiteSpace *> listAssignment <* whiteSpace)
   parseJson = do
     try $ string "application/json"
-    Json <$> (whiteSpace *> json <* whiteSpace)
+    Json <$> (whiteSpace *> jsonValue <* whiteSpace)
 
 allArrows = try openBlockArrow <|> try closeBlockArrow <|> try arrow
 
@@ -510,25 +510,6 @@ separator = do
   char ','
   whiteSpace
 
-json :: FlowParser JsonObj
-json = parseJsonObj <|> parseArray
- where
-  parseArray = do
-    string "["
-    whiteSpace
-    v <- sepBy jsonValue (try separator)
-    whiteSpace
-    string "]"
-    return (JsonObjArray v)
-  parseJsonObj = do
-    try <| string "{"
-    whiteSpace
-    (j, _) <- foldlP pair (try separator) f (id, S.empty)
-    whiteSpace
-    string "}"
-    return (JsonObjObject <| j [])
-    where f v@(key, _) (acc, mem) = if S.member key mem then (acc, mem) else (acc . (v :), S.insert key mem)
-
 float = rd <$> (plus <|> minus <|> number)
  where
   rd    = read :: String -> Float
@@ -562,7 +543,9 @@ jsonValue =
   JsonString
     <$> try quotedString
     <|> JsonObject
-    <$> try json
+    <$> try parseJsonObj
+    <|> JsonArray
+    <$> try parseArray
     <|> JsonInteger
     <$> try integer
     <|> JsonBoolean
@@ -576,6 +559,22 @@ jsonValue =
   parseNull = do
     try <| string "null"
     return JsonNullTk
+  parseJsonObj = do
+    try <| string "{"
+    whiteSpace
+    (j, _) <- foldlP pair (try separator) f (id, S.empty)
+    whiteSpace
+    string "}"
+    return (j [])
+    where f v@(key, _) (acc, mem) = if S.member key mem then (acc, mem) else (acc . (v :), S.insert key mem)
+  parseArray = do
+    string "["
+    whiteSpace
+    v <- sepBy jsonValue (try separator)
+    whiteSpace
+    string "]"
+    return v
+
 
 assignmentKey :: FlowParser Identifier
 assignmentKey = do

@@ -61,7 +61,9 @@ drawRequestData (Just v) x = do
     )
 
 drawData :: Font a => RequestData -> IntermediateT a ((Height, Width), [TextContent])
-drawData (Json json       ) = second (: []) <$> drawJsonObj 0 0 0 json ""
+drawData (Json json) =
+  let coords = ObjectScope {identation = 0, x1 = 0, x2 = 0, y = 0, startSymbol = "", endSymbol = ""}
+  in  second (: []) <$> drawJsonValue coords "" json
 drawData (Form assignments) = mapAccumLM drawAssignments (0, 0) assignments
  where
   drawAssignments (height, width) assignment = do
@@ -87,56 +89,45 @@ drawAssignment currentHeight assignment = do
   element l r = TextSpan [Attr "y" (AttrFloat currentHeight), Attr "x" (AttrFloat 0)]
                          [TextString l, TextString equalSymb, TextString r, TextString sepSymb]
 
-drawJsonObj :: Font a => Float -> Float -> Float -> JsonObj -> String -> IntermediateT a ((Height, Width), TextContent)
-drawJsonObj x1 x2 y obj separator = do
+drawItemList
+  :: Font a
+  => ObjectScope
+  -> [b]
+  -> (ObjectScope -> String -> b -> IntermediateT a ((Height, Width), TextContent))
+  -> String
+  -> IntermediateT a ((Height, Width), TextContent)
+drawItemList coords@ObjectScope {..} ls fun separator = do
   currentFont <- gets font
-  let spaceWidth = getCharWidth currentFont ' '
-  case obj of
-    (JsonObjObject pairs) ->
-      let coords = ObjectScope {identation = spaceWidth, x1 = x1, x2 = x2, y = y, startSymbol = "{", endSymbol = "}"}
-      in  drawItemList coords pairs drawJsonPair
-    (JsonObjArray array) ->
-      let coords = ObjectScope {identation = spaceWidth * 2, x1 = x1, x2 = x2, y = y, startSymbol = "[", endSymbol = "]"}
-      in  drawItemList coords array drawJsonValue
- where
-  drawItemList
-    :: Font a
-    => ObjectScope
-    -> [b]
-    -> (ObjectScope -> String -> b -> IntermediateT a ((Height, Width), TextContent))
-    -> IntermediateT a ((Height, Width), TextContent)
-  drawItemList coords@ObjectScope {..} ls fun = do
-    currentFont <- gets font
-    let separatorCharSize = getStringSize currentFont startSymbol
-        bracketWidth      = infoWidth separatorCharSize
-        bracketHeight     = infoHeight separatorCharSize
-        endSymbolSep      = endSymbol <> separator
-        bracketHeightSep  = infoHeight separatorCharSize
-    case ls of
-      [] -> return
-        ( (bracketHeightSep, bracketWidth * 2)
+  let separatorCharSize = getStringSize currentFont startSymbol
+      bracketWidth      = infoWidth separatorCharSize
+      bracketHeight     = infoHeight separatorCharSize
+      endSymbolSep      = endSymbol <> separator
+      bracketHeightSep  = infoHeight separatorCharSize
+  case ls of
+    [] -> return
+      ( (bracketHeightSep, bracketWidth * 2)
+      , TextSpan
+        []
+        [ TextSpan [Attr "x" <| AttrFloat x1]                   [TextString startSymbol]
+        , TextSpan [Attr "x" <| AttrFloat <| x1 + bracketWidth] [TextString endSymbolSep]
+        ]
+      )
+    ps -> do
+      ((_, (objectHeight, objectWidth)), obj) <- mapAccumLM
+        (drawObject fun)
+        (coords { y = y + bracketHeight, x1 = x2 + identation }, (0, 0))
+        (zipWithSeparator ls)
+      return
+        ( (objectHeight + bracketHeight + bracketHeightSep, objectWidth)
         , TextSpan
           []
-          [ TextSpan [Attr "x" <| AttrFloat x1]                   [TextString startSymbol]
-          , TextSpan [Attr "x" <| AttrFloat <| x1 + bracketWidth] [TextString endSymbolSep]
+          [ TextSpan [Attr "x" <| AttrFloat x1] [TextString startSymbol]
+          , TextSpan []                         obj
+          , TextSpan [Attr "x" <| AttrFloat x2, Attr "y" <| AttrFloat (y + bracketHeight + objectHeight)]
+                     [TextString endSymbolSep]
           ]
         )
-      ps -> do
-        ((_, (objectHeight, objectWidth)), obj) <- mapAccumLM
-          (drawObject fun)
-          (coords { y = y + bracketHeight, x1 = x2 + identation }, (0, 0))
-          (zipWithSeparator ls)
-        return
-          ( (objectHeight + bracketHeight + bracketHeightSep, objectWidth)
-          , TextSpan
-            []
-            [ TextSpan [Attr "x" <| AttrFloat x1] [TextString startSymbol]
-            , TextSpan []                         obj
-            , TextSpan [Attr "x" <| AttrFloat x2, Attr "y" <| AttrFloat (y + bracketHeight + objectHeight)]
-                       [TextString endSymbolSep]
-            ]
-          )
-
+ where
   drawObject
     :: Font a
     => (ObjectScope -> String -> b -> IntermediateT a ((Height, Width), TextContent))
@@ -180,10 +171,24 @@ drawJsonValue :: Font a => ObjectScope -> String -> JsonValue -> IntermediateT a
 drawJsonValue ObjectScope {..} separator value = do
   currentFont <- gets font
   let computeValueFn = computeValue currentFont separator x1 y
+      spaceWidth     = getCharWidth currentFont ' '
   case value of
-    JsonString str -> computeValueFn (wrapInQuote str)
-    JsonObject obj -> do
-      (size, objElem) <- drawJsonObj x1 (identation + x2) y obj separator
+    JsonString str   -> computeValueFn (wrapInQuote str)
+    JsonObject pairs -> do
+      let coords =
+            ObjectScope {identation = spaceWidth, x1 = x1, x2 = (identation + x2), y = y, startSymbol = "{", endSymbol = "}"}
+      (size, objElem) <- drawItemList coords pairs drawJsonPair separator
+      return (size, TextSpan [Attr "y" (AttrFloat y)] [objElem])
+    JsonArray array -> do
+      let coords = ObjectScope
+            { identation  = spaceWidth * 2
+            , x1          = x1
+            , x2          = (identation + x2)
+            , y           = y
+            , startSymbol = "["
+            , endSymbol   = "]"
+            }
+      (size, objElem) <- drawItemList coords array drawJsonValue separator
       return (size, TextSpan [Attr "y" (AttrFloat y)] [objElem])
     JsonInteger int                        -> computeValueFn <| show int
     JsonBoolean bool                       -> computeValueFn <| boolToString bool

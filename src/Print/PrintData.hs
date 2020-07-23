@@ -45,15 +45,6 @@ instance Print Identifier where
     case e of
       Identifier entity -> doc (showString entity)
 
-instance Print JsonObj where
-  prt i e =
-    case e of
-      JsonObjObject object ->
-        concatD [doc (showString "{"), prt 0 object, doc (showString "}")]
-      JsonObjArray array ->
-        concatD [doc (showString "["), prt 0 array, doc (showString "]")]
-
-
 instance Print (String,JsonValue) where
   prt i (str,value) = concatD [prt 0 str, doc (showString ": "), prt 0 value]
   prtList _ [] = id
@@ -65,8 +56,11 @@ instance Print (String,JsonValue) where
 instance Print JsonValue where
   prt i e =
     case e of
+      JsonObject object ->
+        concatD [doc (showString "{"), prt 0 object, doc (showString "}")]
+      JsonArray array ->
+        concatD [doc (showString "["), prt 0 array, doc (showString "]")]
       JsonString str -> prt 0 str
-      JsonObject object -> prt 0 object
       JsonInteger n -> prt 0 n
       JsonBoolean booleantk -> prt 0 booleantk
       JsonNullTk -> doc $ showString "null"
