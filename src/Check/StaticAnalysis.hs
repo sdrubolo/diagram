@@ -51,9 +51,8 @@ checkDiagram EntityTable {..} diagram@(DiagramRule _ flows) = do
 checkStmt :: Flow Info -> Checker (Flow Info)
 checkStmt group@(Group info txt stmts) = do
   activeEntities <- getActiveParticipants
-  when (null stmts && Set.null activeEntities) <| throwError <| infoToError
-    info
-    ("Group is empty and not participant is defined")
+  when (null stmts && Set.null activeEntities) <| throwError <| infoToError info
+                                                                            "Group is empty and not participant is defined"
   mapM_ checkStmt stmts
   return group
 checkStmt request@(Requests _ req) = do
@@ -61,11 +60,11 @@ checkStmt request@(Requests _ req) = do
   return request
 checkStmt set@(SetTo info identifier value) = do
   isResponseActive <- isActiveParticipant identifier
-  when (not isResponseActive) <| throwError <| infoToError info ("Participant " <> identifier <> " is not active")
+  unless isResponseActive <| throwError <| infoToError info ("Participant " <> identifier <> " is not active")
   return set
 checkStmt header@(Header info (Head head _)) = do
   isResponseActive <- isActiveParticipant head
-  when (not isResponseActive) <| throwError <| infoToError info ("Participant " <> head <> " is not active")
+  unless isResponseActive <| throwError <| infoToError info ("Participant " <> head <> " is not active")
   return header
 checkStmt participant@(Participant info name path) = do
   when (null name) <| throwError <| infoToError info "Participant cannot be empty"
@@ -79,15 +78,15 @@ checkStmt note@(Note _ position entities txt) = do
   return note
 checkStmt destroy@(Destroy info entity) = do
   isResponseActive <- isActiveParticipant entity
-  when (not isResponseActive) <| throwError <| infoToError info ("Participant " <> entity <> " is not active")
+  unless isResponseActive <| throwError <| infoToError info ("Participant " <> entity <> " is not active")
   unsetActiveParticipant entity
   return destroy
 checkStmt delay@(Delay info _) = do
   activeEntities <- getActiveParticipants
-  when (Set.null activeEntities) <| throwError <| infoToError info ("Delay cannot be used when participants are not defined")
+  when (Set.null activeEntities) <| throwError <| infoToError info "Delay cannot be used when participants are not defined"
   return delay
-checkStmt title@(Title _ _) = return title
-
+checkStmt title@(  Title   _ _) = return title
+checkStmt comment@(Comment _ _) = return comment
 
 checkRequest :: Request Info -> Checker (Request Info)
 checkRequest groupRequest@(GroupRequest info _ reqs) = do
@@ -95,7 +94,7 @@ checkRequest groupRequest@(GroupRequest info _ reqs) = do
   activeEntities <- getActiveParticipants
   when (null groups && Set.null activeEntities) <| throwError <| infoToError
     info
-    ("Optional group is empty and not participant is defined")
+    "Optional group is empty and not participant is defined"
   return groupRequest
   where extract (LabeledGroupRequest _ _ flows) = flows
 checkRequest request@(Request _ req1 [] Nothing) = do

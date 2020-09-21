@@ -293,7 +293,7 @@ drawElement info blocks (Note _ position entitiesNames text) = do
     return
       ( \info -> getEntityXPos info e_name + 10 - getEntityXPos info s_name + 10
       , \info -> getEntityXPos info s_name - 10
-      , map (\e -> (e, (0, entityWidth))) involvedEntities
+      , map (, (0, entityWidth)) involvedEntities
       )
   postionInfo p eMap width | [(name, _)] <- eMap = do
     let (xAdjustment, widthAdd) = case p of

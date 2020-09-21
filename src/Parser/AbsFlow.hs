@@ -80,6 +80,7 @@ data Diagram a =
 data Flow a
   = Group a Text
           [Flow a]
+  | Comment a String
   | Requests a (Request a)
   | SetTo a String
           Value

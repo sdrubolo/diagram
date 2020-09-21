@@ -1,9 +1,7 @@
 module AbsParser
   ( parseString
   , parseFile
-  , blockComment
   , lettersTillDelimiter
-  , lettersTillDelimiterNoBackTrim
   , parseTillDelimiter
   )
 where
@@ -85,20 +83,11 @@ removeEscapedNewLine []                = []
 removeEscapedNewLine ('\\' : 'n' : xs) = '\n' : removeEscapedNewLine xs
 removeEscapedNewLine (x          : xs) = x : removeEscapedNewLine xs
 
-lineComment = try (string "//") *> manyTill anyChar (void newline <|> void endOfLine)
-
-blockComment = void <| try (string "/*") *> manyTill anyChar (try <| string "*/")
-
-simpleWhitespace = void <| many1 (oneOf " \t\n")
-inlineWhiteSpace = void <| many1 (oneOf " \t")
-
 inLineWhiteSpace :: FlowParser ()
-inLineWhiteSpace = choice [void <| many1 (oneOf " \t") *> inLineWhiteSpace, blockComment *> inLineWhiteSpace, return ()]
+inLineWhiteSpace = choice [void <| many1 (oneOf " \t") *> inLineWhiteSpace, return ()]
 
 whiteSpace :: FlowParser ()
-whiteSpace = choice [simpleWhitespace *> whiteSpace, lineComment *> whiteSpace, blockComment *> whiteSpace, return ()]
-
-comments = choice [inlineWhiteSpace *> comments, lineComment *> comments, blockComment *> comments, return ()]
+whiteSpace = choice [void <| many1 (oneOf " \t\n") *> whiteSpace, return ()]
 
 quotedString = between (char '"') (char '"') (many quotedStringChar)
  where
@@ -112,19 +101,13 @@ number = many1 digit
 
 lettersTillDelimiter p = inLineWhiteSpace *> (removeEscapedNewLine . trim <$> parseTillDelimiter anyChar p) <* whiteSpace
 
-lettersTillDelimiterNoBackTrim p =
-  inLineWhiteSpace *> (removeEscapedNewLine . trim <$> parseTillDelimiter anyChar p) <* comments
-
 parseTillDelimiter :: FlowParser a1 -> FlowParser a2 -> FlowParser [a1]
 parseTillDelimiter s p = f
  where
   f =
     do
-        (try <| lookAhead <| void p) <|> (try <| lookAhead <| void (string "//"))
+        (try <| lookAhead <| void p)
         return []
-      <|> do
-            (try <| lookAhead <| void (string "/*"))
-            blockComment *> f
       <|> do
             c <- s
             v <- f
@@ -189,6 +172,7 @@ flow =
     <|> parseSingleRequest
     <|> parseDelay
     <|> parseTitle
+    <|> parseComment
 
 parseTitle = do
   info <- rowInfo
@@ -216,6 +200,14 @@ parseGroup = do
   whiteSpace
   return <| AbsFlow.Group info label rs
 
+parseComment :: FlowParser (Flow Info)
+parseComment = do
+  info <- rowInfo
+  try (string "#")
+  comment <- lettersTillDelimiter newline
+  whiteSpace
+  return <| Comment info comment
+
 parseHeader :: FlowParser (Flow Info)
 parseHeader = do
   info <- rowInfo
@@ -230,7 +222,7 @@ parseNote = do
   note <- parseNoteOver <|> parseNoteLeftRight
   return <| uncurry3 (Note info) note
  where
-  noteParticipant v = processEntity =<< lettersTillDelimiterNoBackTrim (void v)
+  noteParticipant v = processEntity =<< lettersTillDelimiter (void v)
   noteTxt = do
     commaSep <- optionMaybe <| char ':'
     linedText <$> case commaSep of
