@@ -97,6 +97,15 @@ instance Print SvgElement where
           , justShow i "</pattern>"
           , newLine
           ]
+      Filter elements ->
+        concatD
+          [ justShow i "<filter"
+          , prt i attributes
+          , doc (showString ">")
+          , prt (i + 1) elements
+          , justShow i "</filter>"
+          , newLine
+          ]
       SvgForeingElement foreingElement ->
         concatD
           [ justShow i "<foreignObject"
@@ -154,6 +163,11 @@ instance Print Transform where
       , prt i y
       , doc (showString ")")
       ]
+
+instance Print FilterPrimitives where
+  prt i (OffSet attrs) = concatD [justShow i "<feOffset", prt i attrs, doc (showString "/>"), newLine]
+  prt i (Blend attrs) = concatD [justShow i "<feBlend", prt i attrs, doc (showString "/>"), newLine]
+  prt i (Blur attrs) = concatD [justShow i "<feGaussianBlur", prt i attrs, doc (showString "/>"), newLine]
 
 instance Print AttrValue where
   prt i (AttrStr value) = doc $ showString value

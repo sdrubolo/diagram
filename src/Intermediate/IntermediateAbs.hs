@@ -62,6 +62,7 @@ data StyleElement = FontFace FontFamily Src Format
 data Element
   = IRect [Attr]
   | IPath [Attr]
+  | Filter [Attr] [FilterPrimitives]
   | IStyle [Attr] [StyleElement]
   | ILine [Attr]
   | IGroup [Attr]
@@ -75,6 +76,9 @@ data Element
   | Defs [Element]
   | IText [Attr]
           [TextContent]
+  deriving (Show)
+
+data FilterPrimitives = OffSet [Attr] | Blend [Attr] | Blur [Attr]
   deriving (Show)
 
 instance Monoid Element where

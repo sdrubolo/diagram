@@ -49,6 +49,7 @@ instance TranformTo IAbs.TextContent AbsSvg.TextContent where
 instance TranformTo IAbs.Element SvgElement where
   tranformTo (IRect attrs) = SvgElement (tranformTo attrs) Rect
   tranformTo (IPath attrs) = SvgElement (tranformTo attrs) Path
+  tranformTo (IAbs.Filter attrs content) = SvgElement (tranformTo attrs) (AbsSvg.Filter (tranformTo content))
   tranformTo (ILine attrs) = SvgElement (tranformTo attrs) Line
   tranformTo (IGroup attrs elements) =
     SvgElement (tranformTo attrs) (SvgGroup (tranformTo elements))
@@ -63,3 +64,8 @@ instance TranformTo IAbs.Element SvgElement where
 
 instance TranformTo IAbs.StyleElement AbsSvg.StyleElement where
   tranformTo (IAbs.FontFace fontFamily src format) = AbsSvg.FontFace fontFamily src format
+
+instance TranformTo IAbs.FilterPrimitives AbsSvg.FilterPrimitives where
+  tranformTo (IAbs.OffSet attrs) = AbsSvg.OffSet (tranformTo attrs)
+  tranformTo (IAbs.Blend attrs) = AbsSvg.Blend (tranformTo attrs)
+  tranformTo (IAbs.Blur attrs) = AbsSvg.Blur (tranformTo attrs)

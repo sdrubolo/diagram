@@ -58,6 +58,7 @@ data Element
   = Rect
   | Path
   | Line
+  | Filter [FilterPrimitives]
   | Style [StyleElement]
   | SvgGroup [SvgElement]
   | Use SvgIdentifier
@@ -67,6 +68,9 @@ data Element
   | Defs [SvgElement]
   | SvgText [TextContent]
   | SvgForeingElement [ForeingElement]
+  deriving (Show)
+
+data FilterPrimitives = OffSet [Attr] | Blend [Attr] | Blur [Attr]
   deriving (Show)
 
 data ForeingElement

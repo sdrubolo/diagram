@@ -161,7 +161,7 @@ drawDiagram EntityTable {..} (DiagramRule _ flows) = do
           rWidth                   = (max minWidth <| 10 + max rightWidth nLeftWidth) - nLeftWidth
       (nextX, nextInfo) <- f (xPos + rWidth) eMap keys
       return (nextX, Map.insert key (entity { x = xPos }) nextInfo)
-      where boxWidth entity = maybe 0 (\b -> b_width b) (box entity)
+      where boxWidth entity = maybe 0 b_width (box entity)
 
 
 diagram :: FontTable a -> Map.Map EntityName EntityInfo -> Stmt -> Draw
@@ -215,6 +215,14 @@ diagram font drawInfo diagramStmt =
     , IGroup [Attr "id" (AttrStr "missingArrowSelf")]  [IUse [] "x"]
     , IGroup [Attr "id" (AttrStr "missingArrowLeft")]  [IUse [] "x"]
     , IGroup [Attr "id" (AttrStr "missingArrowRight")] [IUse [] "x"]
+    , Filter
+      [ Attr "id" <| AttrStr "f1"
+      , Attr "x" <| AttrFloat (-20)
+      , Attr "y" <| AttrFloat (-20)
+      , Attr "width" <| AttrStr "200"
+      , Attr "height" <| AttrStr "200"
+      ]
+      [Blur [Attr "in" <| AttrStr "SourceGraphic", Attr "stdDeviation" <| AttrStr "5"]]
     , IPattern
       [ Attr "id"               (AttrStr "pinstripe")
       , Attr "patternUnits"     (AttrStr "userSpaceOnUse")
@@ -272,13 +280,14 @@ drawElement info blocks (Note _ position entitiesNames text) = do
       (width_fn, x_pos_fn, involved_entities) <- postionInfo position esMap (txt_width + 15)
   let entitySet = foldl (\acc el -> acc . Map.insert el (getEntity info el)) id entitiesNames
       box       = rectangle (width_fn info) (evalHeight content + 20) (x_pos_fn info) 1.0 1.0 Black
+      blur      = blurRectangle (width_fn info + 20) (evalHeight content + 30) (x_pos_fn info)
   eInfo <- foldrM (\(e, w) acc -> addEntityTo e acc (mempty { width = w })) mempty involved_entities
   mapM_ (addToActiveEntities . fst) involved_entities
   return
     ( eInfo
     , NoteStmt (mempty { block = blocks })
     <| mempty { propagation = Propagation {top = entitySet, bottom = entitySet} }
-    <> attachTextToBox box content
+    <> attachTextToBox blur (attachTextToBox box content)
     )
  where
   postionInfo
@@ -287,7 +296,7 @@ drawElement info blocks (Note _ position entitiesNames text) = do
     -> [(EntityName, [EntityName])]
     -> Float
     -> IntermediateT a (DrawInfo -> Float, DrawInfo -> Float, [(EntityName, (Float, Float))])
-  postionInfo p eMap width | NoteAbove <- p, [(s_name, s), (e_name, e)] <- eMap = do
+  postionInfo NoteAbove eMap width | [(s_name, s), (e_name, e)] <- eMap, s_name /= e_name = do
     let involvedEntities = e \\ s
         entityWidth      = width / intToFloat (length involvedEntities)
     return
@@ -295,12 +304,14 @@ drawElement info blocks (Note _ position entitiesNames text) = do
       , \info -> getEntityXPos info s_name - 10
       , map (, (0, entityWidth)) involvedEntities
       )
-  postionInfo p eMap width | [(name, _)] <- eMap = do
-    let (xAdjustment, widthAdd) = case p of
-          NoteLeft  -> (-width - 10, (width + 30, 0))
-          NoteRigth -> (10, (0, width + 20))
-          NoteAbove -> (-width / 2, (width / 2, width / 2))
-    return (const width, \info -> getEntityXPos info name + xAdjustment, [(name, widthAdd)])
+  postionInfo p eMap width | ((name, _) : _) <- eMap = do
+    namePosition <- blockOrientedX <$> makeRequestPosition info name blocks
+    let
+      (xAdjustment, widthAdd) = case p of
+        NoteLeft  -> (\_ -> namePosition L - width - 10, (width + 40, 0))
+        NoteRigth -> (\_ -> namePosition R + 10, (0, width + 35))
+        NoteAbove -> let halfWidth = width / 2 in (\info -> getEntityXPos info name - halfWidth, (halfWidth, halfWidth))
+    return (const width, xAdjustment, [(name, widthAdd)])
 
 drawElement info blocks (Include _ _ _ flows) = drawStmts info blocks flows
 drawElement info blocks (Destroy _ entity   ) = do
@@ -543,8 +554,7 @@ buildRequest info (reqBlocks, resBlocks) (Just (BasicRequest _ (RequestEntity fr
     let propagation = addEntityFromRequest info req res
     in  return (mempty, (Nothing, Propagation {top = propagation, bottom = propagation}))
 
-  addSpaceIfNotEmpty payloadInfo =
-    second (\payload -> (if evalHeight payload == 0 then mempty else drawSpace 10) <> payload) payloadInfo
+  addSpaceIfNotEmpty = second (\payload -> (if evalHeight payload == 0 then mempty else drawSpace 10) <> payload)
 
   appendWidth L width (leftWidth, rightWidth) = (width + leftWidth, rightWidth)
   appendWidth _ width (leftWidth, rightWidth) = (leftWidth, width + rightWidth)

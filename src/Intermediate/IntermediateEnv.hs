@@ -203,6 +203,23 @@ rectangle box_width height x fill_opacity strokeWidth color = mempty
                       )
   }
 
+blurRectangle box_width height x = mempty
+  { blockProgress = \_ y ->
+                      ( height
+                      , IRect
+                        [ Attr "x" <| AttrFloat x
+                        , Attr "y" <| AttrFloat y
+                        , Attr "rx" <| AttrInt 1
+                        , Attr "ry" <| AttrInt 1
+                        , Attr "width" <| AttrFloat box_width
+                        , Attr "height" <| AttrFloat height
+                        , Attr "stroke-width" <| AttrFloat 3
+                        , Attr "fill" <| AttrColor White
+                        , Attr "filter" <| AttrStr "url(#f1)"
+                        ]
+                      )
+  }
+
 drawSpace :: Float -> Expr
 drawSpace y = mempty { blockProgress = \_ _ -> (y, IGroup [] []) }
 

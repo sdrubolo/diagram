@@ -22,9 +22,9 @@ import           IntermediateAbs
 type Stmt = StmtBlock Expr
 data RequestExpr a = Empty | RequestExpr ArrowDirection ReqInfo (ReqBlock,ReqBlock) (Maybe (EntityName, EntityInfo)) a a a
 data StmtInfo = StmtInfo {
-   block :: ReqBlock
- , title ::(Float,Expr)
-}
+    block :: ReqBlock
+  , title ::(Float,Expr)
+  }
 
 instance Monoid StmtInfo where
   mempty = StmtInfo {
@@ -148,11 +148,13 @@ expr (OptRequest info x width title@Block {..} reqs) =
 
   wrapRequestInBox :: Float -> Float -> Expr -> Expr
   wrapRequestInBox x width blockReq = blockReq <~> rectangle width (evalHeight blockReq) x 0.0 1.5 Black
-expr (GroupStmt _ startLineX endLineX title body) = line (title <> dash_line <> lineSpace) <> expr body <> line
-  (lineSpace <> dash_line)
+expr (GroupStmt info startLineX endLineX title body) =
+  lineWithFilter groupBlock (title <> dash_line <> lineSpace) <> expr body <> lineWithFilter groupBlock
+                                                                                             (lineSpace <> dash_line)
  where
-  lineSpace = drawSpace 20
-  dash_line = drawDashLine startLineX endLineX
+  groupBlock = block <| info
+  lineSpace  = drawSpace 20
+  dash_line  = drawDashLine startLineX endLineX
 expr (EntityStmt _) = mempty { blockProgress = \info height -> blockProgress (drawParticipants info) info height }
 expr (DelayStmt StmtInfo {..} x1 x2 a) = (rectangle (abs <| x1 - x2) totalHeight x1 1.0 1.0 White) <~> delayExpr
  where
@@ -163,7 +165,7 @@ expr (DelayStmt StmtInfo {..} x1 x2 a) = (rectangle (abs <| x1 - x2) totalHeight
       <> a
       <> drawSpace 20
       <> (dashedBlock 30 block <~> dashLineWithFilter block (drawSpace 30))
-expr (NoteStmt _ a) = line a
+expr (NoteStmt info a) = lineWithFilter (block <| info) a
 expr (DestroyStmt info entities a)
   = (Block
       { propagation   = mempty { bottom = \t -> Set.foldl (\acc entity -> Map.delete entity acc) t entities }
