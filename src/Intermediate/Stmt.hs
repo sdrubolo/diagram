@@ -4,6 +4,7 @@ module Stmt
   , ReqInfo(..)
   , RequestExpr(..)
   , StmtInfo(..)
+  , Rect(..)
   , expr
   , stmtInfo
   )
@@ -40,6 +41,14 @@ instance Semigroup StmtInfo where
       joinTitle title (0,_) =  title
       joinTitle _ title = title
 
+data Rect = Rect { 
+  r_width        :: Float, 
+  r_height       :: Float, 
+  r_x            :: Float, 
+  r_stroke_width :: Float, 
+  r_stroke       ::Float, 
+  r_color        :: Color }
+
 data StmtBlock a
   = EmptyStmt
   | GenericStmt StmtInfo a
@@ -47,7 +56,7 @@ data StmtBlock a
   | RequestStmt StmtInfo a (RequestExpr a) (StmtBlock a) (RequestExpr a) (StmtBlock a)
   | NoSpaceStmt StmtInfo a
   | OptRequest StmtInfo Float Float a [((Float,a),StmtBlock a)]
-  | GroupStmt StmtInfo Float Float a (StmtBlock a)
+  | GroupStmt StmtInfo Float Float a Rect (StmtBlock a)
   | NoteStmt StmtInfo a
   | EntityStmt StmtInfo
   | DelayStmt StmtInfo Float Float a
@@ -73,7 +82,7 @@ instance Semigroup Stmt where
   (<>) any e@(EntityStmt info) = GenericStmt (stmtInfo any <> info) (expr any <> line ( drawSpace 20 ) <> expr e)
   (<>) (NoSpaceStmt info a) (GenericStmt info' b) = GenericStmt (info <> info') (a <> b)
   (<>) any (NoSpaceStmt info a) = NoSpaceStmt (stmtInfo any <> info) (expr any <> a)
-  (<>) (RequestStmt info start req nest res destroy) destroy'@(DestroyStmt _ _ _) = RequestStmt (info <> stmtInfo destroy) start req nest res (destroy <> destroy')
+  (<>) (RequestStmt info start req nest res destroy) destroy'@DestroyStmt {} = RequestStmt (info <> stmtInfo destroy) start req nest res (destroy <> destroy')
   (<>) (DestroyStmt info e b) destory@(DestroyStmt info' e' b') | EmptyStmt  <- b = DestroyStmt (info <> info') (Set.union e e') b'
                                                                 | otherwise = DestroyStmt (info <> info') e (b <> destory)
   (<>) (DestroyStmt info e b) any = DestroyStmt (info <> stmtInfo any) e (b <> any)
@@ -98,27 +107,27 @@ stmtInfo (GenericStmt block _) = block
 stmtInfo (DestroyStmt block _ nest) = block <> mempty { title = title } where StmtInfo { title = title } = stmtInfo nest
 stmtInfo (RequestStmt block _ _ nest _ destroy) = block <> mempty { title = titleNest } <> mempty { title = titleDestroy }
  where
-  StmtInfo { title = titleNest }    = stmtInfo nest
-  StmtInfo { title = titleDestroy } = stmtInfo destroy
-stmtInfo (NoSpaceStmt block _     ) = block
-stmtInfo (OptRequest block _ _ _ _) = block
-stmtInfo (GroupStmt  block _ _ _ _) = block
-stmtInfo (NoteStmt block _        ) = block
-stmtInfo (TitleStmt block         ) = block
-stmtInfo _                          = mempty
+  StmtInfo { title = titleNest }      = stmtInfo nest
+  StmtInfo { title = titleDestroy }   = stmtInfo destroy
+stmtInfo (NoSpaceStmt block _     )   = block
+stmtInfo (OptRequest block _ _ _ _)   = block
+stmtInfo (GroupStmt  block _ _ _ _ _) = block
+stmtInfo (NoteStmt block _        )   = block
+stmtInfo (TitleStmt block         )   = block
+stmtInfo _                            = mempty
 
 injectInfo _    EmptyStmt                         _     = EmptyStmt
 injectInfo left (GenericStmt stmtInfo expr      ) right = GenericStmt (left <> stmtInfo <> right) expr
 injectInfo left (DestroyStmt stmtInfo store expr) right = DestroyStmt (left <> stmtInfo <> right) store expr
 injectInfo left (RequestStmt stmtInfo expr1 req nest res destroy) right =
   RequestStmt (left <> stmtInfo <> right) expr1 req nest res destroy
-injectInfo left (NoSpaceStmt stmtInfo expr              ) right = NoSpaceStmt (left <> stmtInfo <> right) expr
-injectInfo left (OptRequest stmtInfo x  width title opts) right = OptRequest (left <> stmtInfo <> right) x width title opts
-injectInfo left (GroupStmt  stmtInfo x1 x2    expr  stmt) right = GroupStmt (left <> stmtInfo <> right) x1 x2 expr stmt
-injectInfo left (NoteStmt stmtInfo expr                 ) right = NoteStmt (left <> stmtInfo <> right) expr
-injectInfo left (EntityStmt stmtInfo                    ) right = EntityStmt (left <> stmtInfo <> right)
-injectInfo left (DelayStmt stmtInfo x1 x2 expr          ) right = DelayStmt (left <> stmtInfo <> right) x1 x2 expr
-injectInfo left (TitleStmt stmtInfo                     ) right = TitleStmt (left <> stmtInfo <> right)
+injectInfo left (NoSpaceStmt stmtInfo expr              ) right     = NoSpaceStmt (left <> stmtInfo <> right) expr
+injectInfo left (OptRequest stmtInfo x  width title opts) right     = OptRequest (left <> stmtInfo <> right) x width title opts
+injectInfo left (GroupStmt  stmtInfo x1 x2    expr  box stmt) right = GroupStmt (left <> stmtInfo <> right) x1 x2 expr box stmt
+injectInfo left (NoteStmt stmtInfo expr                 ) right     = NoteStmt (left <> stmtInfo <> right) expr
+injectInfo left (EntityStmt stmtInfo                    ) right     = EntityStmt (left <> stmtInfo <> right)
+injectInfo left (DelayStmt stmtInfo x1 x2 expr          ) right     = DelayStmt (left <> stmtInfo <> right) x1 x2 expr
+injectInfo left (TitleStmt stmtInfo                     ) right     = TitleStmt (left <> stmtInfo <> right)
 
 -- Stmt -> Expr
 
@@ -148,15 +157,16 @@ expr (OptRequest info x width title@Block {..} reqs) =
 
   wrapRequestInBox :: Float -> Float -> Expr -> Expr
   wrapRequestInBox x width blockReq = blockReq <~> rectangle width (evalHeight blockReq) x 0.0 1.5 Black
-expr (GroupStmt info startLineX endLineX title body) =
-  lineWithFilter groupBlock (title <> dash_line <> lineSpace) <> expr body <> lineWithFilter groupBlock
-                                                                                             (lineSpace <> dash_line)
+
+expr (GroupStmt info startLineX endLineX title Rect{..} body) =
+  lineWithFilter groupBlock (titleBox <> dash_line <> lineSpace) <> expr body <> lineWithFilter groupBlock (lineSpace <> dash_line)
  where
+  titleBox = attachTextToBox (rectangle r_width (evalHeight title + 10) r_x r_stroke_width r_stroke r_color) title
   groupBlock = block <| info
   lineSpace  = drawSpace 20
   dash_line  = drawDashLine startLineX endLineX
 expr (EntityStmt _) = mempty { blockProgress = \info height -> blockProgress (drawParticipants info) info height }
-expr (DelayStmt StmtInfo {..} x1 x2 a) = (rectangle (abs <| x1 - x2) totalHeight x1 1.0 1.0 White) <~> delayExpr
+expr (DelayStmt StmtInfo {..} x1 x2 a) = rectangle (abs <| x1 - x2) totalHeight x1 1.0 1.0 White <~> delayExpr
  where
   totalHeight = evalHeight delayExpr
   delayExpr =
@@ -168,7 +178,7 @@ expr (DelayStmt StmtInfo {..} x1 x2 a) = (rectangle (abs <| x1 - x2) totalHeight
 expr (NoteStmt info a) = lineWithFilter (block <| info) a
 expr (DestroyStmt info entities a)
   = (Block
-      { propagation   = mempty { bottom = \t -> Set.foldl (\acc entity -> Map.delete entity acc) t entities }
+      { propagation   = mempty { bottom = \t -> Set.foldl (flip Map.delete) t entities }
       , blockProgress = \info height ->
         ( destroyLineHeight
         , Set.foldl
@@ -202,8 +212,8 @@ expr (RequestStmt _ start req@(RequestExpr _ _ (_, resBlocks) _ label _ _) nest 
   block :: RequestExpr Expr -> RequestExpr Expr -> Expr -> Expr
   block _ Empty _ = mempty
   block (RequestExpr _ reqInfo _ _ _ _ _) (RequestExpr _ resInfo _ _ _ arrow _) block =
-    let startX         = (req_x resInfo) - 10
-        reqBlockHeight = evalHeight arrow + (height reqInfo) + evalHeight block
+    let startX         = req_x resInfo - 10
+        reqBlockHeight = evalHeight arrow + height reqInfo + evalHeight block
     in  translate 0 (arrow_y reqInfo) <| mempty
           { blockProgress = \_ height ->
                               ( reqBlockHeight
@@ -223,11 +233,14 @@ expr (RequestStmt _ start req@(RequestExpr _ _ (_, resBlocks) _ label _ _) nest 
       , Attr "stroke-width" <| AttrFloat stroke_width
       , Attr "fill" <| AttrStr fill
       ]
+  block _ _ _ = error "expr.block not suppored match" 
+expr _ =  error "expr not suppored match" 
 
+printSingleReq :: (ReqBlock -> Expr -> Expr) -> Stmt -> RequestExpr Expr -> Expr
 printSingleReq lineFn destroy   r@(RequestExpr S _ _ _ _ _ _) = singleRequestExpr r lineFn <> expr destroy
 printSingleReq lineFn EmptyStmt req                           = singleRequestExpr req lineFn
 printSingleReq lineFn destroy (RequestExpr direction reqInfo nestingBlocks participant label arrow payload) =
-  singleRequestExpr noPayloadRequest lineFn <> (wrapInLine (entities destroy) payload (expr destroy))
+  singleRequestExpr noPayloadRequest lineFn <> wrapInLine (entities destroy) payload (expr destroy)
  where
 
   wrapInLine _ payload destroy | evalHeight payload == 0 = destroy
@@ -245,6 +258,8 @@ printSingleReq lineFn destroy (RequestExpr direction reqInfo nestingBlocks parti
 
   entities (DestroyStmt _ es _) = es
   entities _                    = mempty
+printSingleReq _ _ _ = error "printSingleReq not suppored match"  
+
 
 singleRequestExpr :: RequestExpr Expr -> (ReqBlock -> Expr -> Expr) -> Expr
 singleRequestExpr Empty _ = mempty
@@ -254,7 +269,7 @@ singleRequestExpr (RequestExpr direction ReqInfo {..} blocks@(reqBlocks, _) part
     req_y
     (  lineFn reqBlocks (labelSpacingX participant <> label)
     <> (mempty { propagation = reqScope })
-    <> (lineWithFilter (makeBlocks direction blocks) (participantExpr participant <~> arrow <~> payload))
+    <> lineWithFilter (makeBlocks direction blocks) (participantExpr participant <~> arrow <~> payload)
     )
  where
 
@@ -295,6 +310,7 @@ drawParticipant name info@EntityInfo { box = box, x = x_pos, txt = Just blockTex
       height  = maybe 0 b_height box
   in  attachTextToBox (rectangle width height box_pos 1.0 1.0 Black)
                       (translate x_pos 0 blockText) { propagation = mempty { bottom = Map.insert name info } }
+drawParticipant _ _ = error "drawParticipant not supported match"
 
 line :: Expr -> Expr
 line = lineWithFilter Map.empty

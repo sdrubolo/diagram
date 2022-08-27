@@ -185,6 +185,7 @@ nextEntity entity = do
 ------------ TODO create utils file with common function used ------------
 --------------------------------------------------------------------------
 
+rectangle :: Monoid (Block a) => Float -> Float -> Float -> Float -> Float -> Color -> Block a
 rectangle box_width height x fill_opacity strokeWidth color = mempty
   { blockProgress = \_ y ->
                       ( height

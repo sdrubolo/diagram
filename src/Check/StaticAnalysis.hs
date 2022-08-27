@@ -12,7 +12,7 @@ import           AbsFlow                       as Abs
 import           Flow
 import           Debug.Trace
 
-data Env =
+newtype Env =
    Env
      { activeEntities :: Set.Set String }
 
@@ -90,7 +90,7 @@ checkStmt comment@(Comment _ _) = return comment
 
 checkRequest :: Request Info -> Checker (Request Info)
 checkRequest groupRequest@(GroupRequest info _ reqs) = do
-  groups         <- foldlM (\acc req -> ((<>) acc . extract) <$> checkLabeledGroupRequest req) [] reqs
+  groups         <- foldlM (\acc req -> (<>) acc . extract <$> checkLabeledGroupRequest req) [] reqs
   activeEntities <- getActiveParticipants
   when (null groups && Set.null activeEntities) <| throwError <| infoToError
     info

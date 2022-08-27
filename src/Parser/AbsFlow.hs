@@ -8,7 +8,7 @@ data Info = Info {
   row :: Int,
   column :: Int,
   src :: String
-} deriving (Show)
+} deriving (Show, Eq)
 
 data Error = Error {
   row :: Int,
@@ -39,7 +39,7 @@ instance Monoid Text where
 
 type EntityName = String
 
-data Text = Text
+newtype Text = Text
   { t :: [String]
   } deriving (Eq, Ord, Show)
 

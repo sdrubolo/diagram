@@ -68,4 +68,11 @@ main = do
       "svg" -> do
         input <- getTTFFontTable fontFile 14
         parserText die svgFile destFile (parser input)
+      _ -> hPutStr stderr "Wrong transformer"
     _ -> hPutStr stderr "Wrong number of arguments"
+
+
+f d = let fontFile = "/Users/gianluca/Desktop/projects/Static/Fonts/Monaco2.ttf"
+          svgFile = "/Users/gianluca/Desktop/projects/Static/Diagrams/diagram/" ++ d ++ ".diagram"
+          destFile = "/Users/gianluca/Desktop/projects/Static/Diagrams/svg/" ++ d ++ ".diagram.svg" 
+      in  getTTFFontTable fontFile 14 >>= \input -> parserText die svgFile destFile (parser input)
