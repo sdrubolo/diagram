@@ -31,13 +31,15 @@ data SizeInfo = SizeInfo {
   infoHeight :: Float
 } deriving (Show, Eq)
 
-data FontTable a = FontTable { name :: String
-                             , lineHeigth :: Float
-                             , src :: String
-                             , fontSize :: Float
-                             , fontLineGap :: Float
-                             , table :: M.Map Char Size
-                             , fontType :: String }
+data FontTable a = FontTable
+  { name        :: String
+  , lineHeigth  :: Float
+  , src         :: String
+  , fontSize    :: Float
+  , fontLineGap :: Float
+  , table       :: M.Map Char Size
+  , fontType    :: String
+  }
 
 instance Semigroup SizeInfo where
   (<>) a b =

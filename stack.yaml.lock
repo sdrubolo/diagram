@@ -7,13 +7,13 @@ packages:
 - completed:
     hackage: IfElse-0.85@sha256:6939b94acc6a55f545f63a168a349dd2fbe4b9a7cca73bf60282db5cc6aa47d2,445
     pantry-tree:
-      size: 213
       sha256: 4efed7ab11ec6d794c7e56eb76216363c51c4c084d9a616917fc025a1151cd65
+      size: 213
   original:
     hackage: IfElse-0.85
 snapshots:
 - completed:
-    size: 531707
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/16/5.yaml
-    sha256: 9751e25e0af5713a53ddcfcc79564b082c71b1b357fadef0d85672a5b5ba3703
-  original: lts-16.5
+    sha256: a81fb3877c4f9031e1325eb3935122e608d80715dc16b586eb11ddbff8671ecd
+    size: 640086
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/21/25.yaml
+  original: lts-21.25

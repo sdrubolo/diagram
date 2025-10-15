@@ -1,10 +1,8 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.4.
+-- This file has been generated from package.yaml by hpack version 0.35.0.
 --
 -- see: https://github.com/sol/hpack
---
--- hash: b878621a6d739399f8e0d17e404d8bdaf1a3486ab0671ca615f7e3360d97d740
 
 name:           diagram
 version:        0.1.0.0
@@ -12,8 +10,8 @@ description:    Please see the README on GitHub at <https://github.com/githubuse
 homepage:       https://github.com/githubuser/diagram#readme
 bug-reports:    https://github.com/githubuser/diagram/issues
 author:         Gianluca Sant
-maintainer:     example@example.com
-copyright:      2020 Gianluca Sant
+maintainer:     sdrubolandia@gmail.com
+copyright:      2022 Gianluca Sant
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -29,11 +27,15 @@ library
   exposed-modules:
       Font
       TTF
-      Intermediate
+      AbsToIntermediate
+      Env
+      Intermediate_old
       IntermediateAbs
       IntermediateData
       IntermediateEnv
+      IntermediateInfo
       Stmt
+      Txt
       IntermediateTranform
       Svg
       Print
@@ -42,8 +44,11 @@ library
       PrintSvg
       AbsSvg
       AbsData
+      AbsError
       AbsFlow
       AbsParser
+      Analyzer
+      Expr
       StaticAnalysis
   other-modules:
       Paths_diagram
@@ -54,7 +59,7 @@ library
       src/Print
       src/Svg
       src/Parser
-      src/Check
+      src/Analysis
   default-extensions:
       RecordWildCards
       DuplicateRecordFields
@@ -69,19 +74,19 @@ library
   build-depends:
       IfElse
     , base >=4.7 && <5
-    , binary ==0.8.7.0
-    , bytestring ==0.10.10.0
+    , binary ==0.8.9.1
+    , bytestring ==0.11.5.3
     , containers
-    , directory ==1.3.6.0
-    , extra >=1.6.19
-    , filepath ==1.4.2.1
-    , flow >=1.0.19
+    , directory ==1.3.7.1
+    , extra ==1.7.14
+    , filepath ==1.4.2.2
+    , flow >=2.0.0.4
     , mtl ==2.2.2
-    , parsec ==3.1.14.0
-    , parser-combinators ==1.2.1
-    , text ==1.2.4.0
-    , utility-ht >=0.0.14
-    , vector ==0.12.1.2
+    , parsec ==3.1.16.1
+    , parser-combinators ==1.3.0
+    , text ==2.0.2
+    , utility-ht >=0.0.17
+    , vector ==0.13.1.0
   default-language: Haskell2010
 
 executable diagram-exe
@@ -105,20 +110,20 @@ executable diagram-exe
   build-depends:
       IfElse
     , base >=4.7 && <5
-    , binary ==0.8.7.0
-    , bytestring ==0.10.10.0
+    , binary ==0.8.9.1
+    , bytestring ==0.11.5.3
     , containers
     , diagram
-    , directory ==1.3.6.0
-    , extra >=1.6.19
-    , filepath ==1.4.2.1
-    , flow >=1.0.19
+    , directory ==1.3.7.1
+    , extra ==1.7.14
+    , filepath ==1.4.2.2
+    , flow >=2.0.0.4
     , mtl ==2.2.2
-    , parsec ==3.1.14.0
-    , parser-combinators ==1.2.1
-    , text ==1.2.4.0
-    , utility-ht >=0.0.14
-    , vector ==0.12.1.2
+    , parsec ==3.1.16.1
+    , parser-combinators ==1.3.0
+    , text ==2.0.2
+    , utility-ht >=0.0.17
+    , vector ==0.13.1.0
   default-language: Haskell2010
 
 test-suite haskell-example-test
@@ -126,6 +131,9 @@ test-suite haskell-example-test
   main-is: Spec.hs
   other-modules:
       AbsParserSpec
+      AbsToIntermediateSpec
+      AnalyzerSpec
+      EnvSpec
       Paths_diagram
   hs-source-dirs:
       test
@@ -145,20 +153,20 @@ test-suite haskell-example-test
       IfElse
     , QuickCheck
     , base >=4.7 && <5
-    , binary ==0.8.7.0
-    , bytestring ==0.10.10.0
+    , binary ==0.8.9.1
+    , bytestring ==0.11.5.3
     , containers
     , diagram
-    , directory ==1.3.6.0
-    , extra >=1.6.19
-    , filepath ==1.4.2.1
-    , flow >=1.0.19
+    , directory ==1.3.7.1
+    , extra ==1.7.14
+    , filepath ==1.4.2.2
+    , flow >=2.0.0.4
     , hspec
     , hspec-discover
     , mtl ==2.2.2
-    , parsec ==3.1.14.0
-    , parser-combinators ==1.2.1
-    , text ==1.2.4.0
-    , utility-ht >=0.0.14
-    , vector ==0.12.1.2
+    , parsec ==3.1.16.1
+    , parser-combinators ==1.3.0
+    , text ==2.0.2
+    , utility-ht >=0.0.17
+    , vector ==0.13.1.0
   default-language: Haskell2010

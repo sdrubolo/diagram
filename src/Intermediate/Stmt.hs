@@ -73,7 +73,7 @@ instance Semigroup Stmt where
   (<>) any e@(EntityStmt info) = GenericStmt (stmtInfo any <> info) (expr any <> line ( drawSpace 20 ) <> expr e)
   (<>) (NoSpaceStmt info a) (GenericStmt info' b) = GenericStmt (info <> info') (a <> b)
   (<>) any (NoSpaceStmt info a) = NoSpaceStmt (stmtInfo any <> info) (expr any <> a)
-  (<>) (RequestStmt info start req nest res destroy) destroy'@(DestroyStmt _ _ _) = RequestStmt (info <> stmtInfo destroy) start req nest res (destroy <> destroy')
+  (<>) (RequestStmt info start req nest res destroy) destroy'@DestroyStmt {} = RequestStmt (info <> stmtInfo destroy) start req nest res (destroy <> destroy')
   (<>) (DestroyStmt info e b) destory@(DestroyStmt info' e' b') | EmptyStmt  <- b = DestroyStmt (info <> info') (Set.union e e') b'
                                                                 | otherwise = DestroyStmt (info <> info') e (b <> destory)
   (<>) (DestroyStmt info e b) any = DestroyStmt (info <> stmtInfo any) e (b <> any)
@@ -156,7 +156,7 @@ expr (GroupStmt info startLineX endLineX title body) =
   lineSpace  = drawSpace 20
   dash_line  = drawDashLine startLineX endLineX
 expr (EntityStmt _) = mempty { blockProgress = \info height -> blockProgress (drawParticipants info) info height }
-expr (DelayStmt StmtInfo {..} x1 x2 a) = (rectangle (abs <| x1 - x2) totalHeight x1 1.0 1.0 White) <~> delayExpr
+expr (DelayStmt StmtInfo {..} x1 x2 a) = rectangle (abs <| x1 - x2) totalHeight x1 1.0 1.0 White <~> delayExpr
  where
   totalHeight = evalHeight delayExpr
   delayExpr =
@@ -168,7 +168,7 @@ expr (DelayStmt StmtInfo {..} x1 x2 a) = (rectangle (abs <| x1 - x2) totalHeight
 expr (NoteStmt info a) = lineWithFilter (block <| info) a
 expr (DestroyStmt info entities a)
   = (Block
-      { propagation   = mempty { bottom = \t -> Set.foldl (\acc entity -> Map.delete entity acc) t entities }
+      { propagation   = mempty { bottom = \t -> Set.foldl (flip Map.delete) t entities }
       , blockProgress = \info height ->
         ( destroyLineHeight
         , Set.foldl
@@ -202,8 +202,8 @@ expr (RequestStmt _ start req@(RequestExpr _ _ (_, resBlocks) _ label _ _) nest 
   block :: RequestExpr Expr -> RequestExpr Expr -> Expr -> Expr
   block _ Empty _ = mempty
   block (RequestExpr _ reqInfo _ _ _ _ _) (RequestExpr _ resInfo _ _ _ arrow _) block =
-    let startX         = (req_x resInfo) - 10
-        reqBlockHeight = evalHeight arrow + (height reqInfo) + evalHeight block
+    let startX         = req_x resInfo - 10
+        reqBlockHeight = evalHeight arrow + height reqInfo + evalHeight block
     in  translate 0 (arrow_y reqInfo) <| mempty
           { blockProgress = \_ height ->
                               ( reqBlockHeight
@@ -227,7 +227,7 @@ expr (RequestStmt _ start req@(RequestExpr _ _ (_, resBlocks) _ label _ _) nest 
 printSingleReq lineFn destroy   r@(RequestExpr S _ _ _ _ _ _) = singleRequestExpr r lineFn <> expr destroy
 printSingleReq lineFn EmptyStmt req                           = singleRequestExpr req lineFn
 printSingleReq lineFn destroy (RequestExpr direction reqInfo nestingBlocks participant label arrow payload) =
-  singleRequestExpr noPayloadRequest lineFn <> (wrapInLine (entities destroy) payload (expr destroy))
+  singleRequestExpr noPayloadRequest lineFn <> wrapInLine (entities destroy) payload (expr destroy)
  where
 
   wrapInLine _ payload destroy | evalHeight payload == 0 = destroy
@@ -252,9 +252,9 @@ singleRequestExpr (RequestExpr direction ReqInfo {..} blocks@(reqBlocks, _) part
   translate
     0
     req_y
-    (  lineFn reqBlocks (labelSpacingX participant <> label)
-    <> (mempty { propagation = reqScope })
-    <> (lineWithFilter (makeBlocks direction blocks) (participantExpr participant <~> arrow <~> payload))
+    (lineFn reqBlocks (labelSpacingX participant <> label) <> (mempty { propagation = reqScope }) <> lineWithFilter
+      (makeBlocks direction blocks)
+      (participantExpr participant <~> arrow <~> payload)
     )
  where
 

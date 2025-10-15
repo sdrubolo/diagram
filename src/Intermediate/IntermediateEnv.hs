@@ -78,15 +78,13 @@ type EntityStore = Map.Map EntityName EntityInfo
 
 data Env a =
    Env
-     { entityDefs :: Map.Map String EntityDef
-     , font :: FontTable a
+     { font :: FontTable a
      , scope :: Set.Set EntityName
      , boxWidth :: Float
      , boxHeight :: Float
      }
 
-initEnv entites font =
-  Env {entityDefs = entitiesMap entites, font = font, boxWidth = 60.0, boxHeight = 60.0, scope = Set.empty}
+initEnv entites font = Env {font = font, boxWidth = 60.0, boxHeight = 60.0, scope = Set.empty}
 
 data Propagation a = Propagation {
     top :: a -> a
@@ -156,30 +154,30 @@ evalHeight Block {..} = fst <| blockProgress Map.empty 0
 intToFloat :: Int -> Float
 intToFloat = fromInteger . toInteger
 
-getPreviousEntitiesAndItself :: [String] -> IntermediateT a [(EntityName, [EntityName])]
-getPreviousEntitiesAndItself entities =
-  sortOn (length . snd) <$> mapM (\e -> (e, ) . prevs . (Map.! e) <$> gets entityDefs) entities
+--getPreviousEntitiesAndItself :: [String] -> IntermediateT a [(EntityName, [EntityName])]
+--getPreviousEntitiesAndItself entities =
+--  sortOn (length . snd) <$> mapM (\e -> (e, ) . prevs . (Map.! e) <$> gets entityDefs) entities
 
-getLeftSideEntity :: String -> IntermediateT a EntityName
-getLeftSideEntity e = last . prevs . (Map.! e) <$> gets entityDefs
+--getLeftSideEntity :: String -> IntermediateT a EntityName
+--getLeftSideEntity e = last . prevs . (Map.! e) <$> gets entityDefs
 
-getSortedEntities :: IntermediateT a [String]
-getSortedEntities = map fst . sortOn (length . prevs . snd) . Map.assocs <$> gets entityDefs
+--getSortedEntities :: IntermediateT a [String]
+--getSortedEntities = map fst . sortOn (length . prevs . snd) . Map.assocs <$> gets entityDefs
 
-previousEntities :: String -> IntermediateT a [String]
-previousEntities entity = prevs . (Map.! entity) <$> gets entityDefs
+--previousEntities :: String -> IntermediateT a [String]
+--previousEntities entity = prevs . (Map.! entity) <$> gets entityDefs
 
-prevEntity :: Font a => String -> IntermediateT a (Maybe String)
-prevEntity entity = do
-  previousEntities <- previousEntities entity
-  return <| if null previousEntities then Nothing else Just <| last previousEntities
+--prevEntity :: Font a => String -> IntermediateT a (Maybe String)
+--prevEntity entity = do
+--  previousEntities <- previousEntities entity
+--  return <| if null previousEntities then Nothing else Just <| last previousEntities
 
-nextEntity :: Font a => String -> IntermediateT a (Maybe String)
-nextEntity entity = do
-  allEntities      <- getSortedEntities
-  previousEntities <- previousEntities entity
-  let nextEntities = allEntities \\ (previousEntities <> [entity])
-  return <| if null nextEntities then Nothing else Just <| head nextEntities
+--nextEntity :: Font a => String -> IntermediateT a (Maybe String)
+--nextEntity entity = do
+--  allEntities      <- getSortedEntities
+--  previousEntities <- previousEntities entity
+--  let nextEntities = allEntities \\ (previousEntities <> [entity])
+--  return <| if null nextEntities then Nothing else Just <| head nextEntities
 
 --------------------------------------------------------------------------
 ------------ TODO create utils file with common function used ------------

@@ -8,6 +8,7 @@ import           Data.Char
 import           Flow
 import           Print
 import           PrintData
+import           Env                            ( Env(entities) )
 
 -- the top-level printing method
 printTree :: Print a => a -> String
@@ -32,9 +33,9 @@ render d = rend 0 (map ($ "") $ d []) ""
   space t = showString t . (\s -> if null s then "" else ' ' : s)
 
 instance Print StartNote where
-  prt _ NoteAbove = doc (showString "note over")
-  prt _ NoteLeft = doc (showString "note left of")
-  prt _ NoteRigth = doc (showString "note right of")
+  prt _ NoteAbove = doc $ showString "note over"
+  prt _ NoteLeft = doc $ showString "note left of"
+  prt _ NoteRight = doc $ showString "note right of"
 
 instance Print Text where
   prt _ Text {..} = doc (showString <| unlines t)
@@ -70,13 +71,13 @@ instance Print (Flow a) where
              --, prt 0 entitysubs
              , doc (showString "}")
              ])
-      Note _ startNote desc content ->
+      Note _ startNote entities content ->
         prPrec
           i
           0
           (concatD
              [ prt 0 startNote
-             , prtDescList desc
+             , prtDescList entities
              , prt 0 content
              , doc (showString "end note")
              ])

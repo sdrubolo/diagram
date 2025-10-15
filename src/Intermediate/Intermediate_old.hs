@@ -1,7 +1,7 @@
 
 {-# LANGUAGE RecursiveDo           #-}
 
-module Intermediate
+module Intermediate_old
   ( draw
   )
 where
@@ -105,13 +105,13 @@ getEntity info entity = entityInfo info Map.! entity
 getEntityXPos :: DrawInfo -> EntityName -> Float
 getEntityXPos info entity = x (getEntity info entity)
 
-getBoundaryEntities :: Font a => [String] -> IntermediateT a (String, String)
-getBoundaryEntities allEntities = do
-  sortedEntities <- flip intersect allEntities <$> getSortedEntities
-  return (head sortedEntities, last sortedEntities)
+--getBoundaryEntities :: Font a => [String] -> IntermediateT a (String, String)
+--getBoundaryEntities allEntities = do
+--  sortedEntities <- flip intersect allEntities <$> getSortedEntities
+--  return (head sortedEntities, last sortedEntities)
 
-getEntityNames :: DrawInfo -> IntermediateT a [String]
-getEntityNames info = flip intersect (Map.foldrWithKey (\e _ acc -> e : acc) [] <| entityInfo info) <$> getSortedEntities
+--getEntityNames :: DrawInfo -> IntermediateT a [String]
+--getEntityNames info = flip intersect (Map.foldrWithKey (\e _ acc -> e : acc) [] <| entityInfo info) <$> getSortedEntities
 
 mkStartDrawInfo :: Font a => Map.Map String EntityDef -> IntermediateT a DrawInfo
 mkStartDrawInfo eInfo = do
@@ -121,7 +121,7 @@ mkStartDrawInfo eInfo = do
   mkEntityInfos computedInfo maxEntityHeight (max_height, drawInfo) entity@EntityDef { name = entityName, text = entityText }
     = do
       rec (entityWidth, txt) <- linedText entityText (-entityWidth / 2)
-          leftEntity         <- getLeftSideEntity entityName
+          leftEntity         <- return "" -- getLeftSideEntity entityName
       boxWidth  <- gets boxWidth
       boxHeight <- gets boxHeight
       let w                   = max boxWidth <| entityWidth + 30
@@ -135,9 +135,10 @@ mkStartDrawInfo eInfo = do
       info <- addEntityTo entityName mempty def
       return (max max_height box_height, drawInfo <> info)
 
-draw :: Font a => FontTable a -> EntityTable -> Diagram b -> Either String Draw
-draw font table diagram = evalState (runExceptT (drawDiagram table diagram)) (initEnv table font)
+draw :: Font a => FontTable a -> Diagram b -> Either String Draw
+draw font diagram = Left "" -- evalState (runExceptT (drawDiagram diagram)) (initEnv table font)
 
+{- 
 drawDiagram :: Font a => EntityTable -> Diagram b -> IntermediateT a Draw
 drawDiagram EntityTable {..} (DiagramRule _ flows) = do
   font     <- gets font
@@ -162,7 +163,7 @@ drawDiagram EntityTable {..} (DiagramRule _ flows) = do
       (nextX, nextInfo) <- f (xPos + rWidth) eMap keys
       return (nextX, Map.insert key (entity { x = xPos }) nextInfo)
       where boxWidth entity = maybe 0 b_width (box entity)
-
+-}
 
 diagram :: FontTable a -> Map.Map EntityName EntityInfo -> Stmt -> Draw
 diagram font drawInfo diagramStmt =
@@ -252,28 +253,29 @@ drawParticipant EntityInfo { box = box, x = x_pos, txt = Just blockText } =
   in  attachTextToBox (rectangle width h box_pos 1.0 1.0 Black) (translate x_pos 0 blockText)
 
 drawElement :: Font a => DrawInfo -> ReqBlock -> Flow b -> IntermediateT a (DrawInfo, Stmt)
-drawElement info blocks (Title _ title) = do
-  (titleWidth, titleExpr) <- linedText title 0
-  return <| (mempty, TitleStmt (mempty { title = (titleWidth, drawSpace_20 <> titleExpr <> drawSpace_20) }))
-drawElement info blocks (     Requests _ request    ) = drawRequest blocks info request
-drawElement info blocks step@(Abs.Group _ text stmts) = do
-  (groupInfo, groupRequests) <- drawStmts info blocks stmts
-  rec (eInfo, (leftmost, rightmost)) <- getGroupCoordinates groupInfo blocks (width + 30)
-      (width, txt                  ) <- linedText text xText
-      let xText  = x1 + (x2 - x1 - width) / 2
-          x1     = getEntityXPos info leftmost
-          x2     = getEntityXPos info rightmost
-          lineX1 = x1 - 20
-          lineX2 = x2 + 20
-  return
-    ( eInfo
-    , GroupStmt (mempty { block = blocks })
-                lineX1
-                lineX2
-                (attachTextToBox (rectangle width (evalHeight txt + 10) xText 1.0 1.0 White) txt)
-                groupRequests
-    )
+--drawElement info blocks (Title _ title) = do
+--  (titleWidth, titleExpr) <- linedText title 0
+--  return <| (mempty, TitleStmt (mempty { title = (titleWidth, drawSpace_20 <> titleExpr <> drawSpace_20) }))
+drawElement info blocks (Requests _ request) = drawRequest blocks info request
+--drawElement info blocks step@(Abs.Group _ text stmts) = do
+--  (groupInfo, groupRequests) <- drawStmts info blocks stmts
+--  rec (eInfo, (leftmost, rightmost)) <- getGroupCoordinates groupInfo blocks (width + 30)
+--      (width, txt                  ) <- linedText text xText
+--      let xText  = x1 + (x2 - x1 - width) / 2
+--          x1     = getEntityXPos info leftmost
+--          x2     = getEntityXPos info rightmost
+--          lineX1 = x1 - 20
+--          lineX2 = x2 + 20
+--  return
+--    ( eInfo
+--    , GroupStmt (mempty { block = blocks })
+--                lineX1
+--                lineX2
+--                (attachTextToBox (rectangle width (evalHeight txt + 10) xText 1.0 1.0 White) txt)
+--                groupRequests
+--    )
 
+{- 
 drawElement info blocks (Note _ position entitiesNames text) = do
   rec (txt_width, content) <- linedText text (x_pos_fn info + (width_fn info - txt_width) / 2)
       esMap                <- getPreviousEntitiesAndItself entitiesNames
@@ -312,17 +314,17 @@ drawElement info blocks (Note _ position entitiesNames text) = do
         NoteRigth -> (\_ -> namePosition R + 10, (0, width + 35))
         NoteAbove -> let halfWidth = width / 2 in (\info -> getEntityXPos info name - halfWidth, (halfWidth, halfWidth))
     return (const width, xAdjustment, [(name, widthAdd)])
-
-drawElement info blocks (Include _ _ _ flows) = drawStmts info blocks flows
-drawElement info blocks (Destroy _ entity   ) = do
+-}
+--drawElement info blocks (Include _ _ _ flows) = drawStmts info blocks flows
+drawElement info blocks (Destroy  _ entity ) = do
   deleteFromActiveEntities entity
   return (mempty, DestroyStmt (mempty { block = blocks }) (Set.singleton entity) EmptyStmt)
-drawElement _ _ (Participant _ participant _) = do
-  addToActiveEntities participant
-  (, mempty) <$> addEntityTo participant mempty mempty
+--drawElement _ _ (Participant _ participant _) = do
+--  addToActiveEntities participant
+--  (, mempty) <$> addEntityTo participant mempty mempty
 drawElement info blocks (Delay _ txt) = do
   allInvolvedEntities   <- Set.toList <$> gets scope
-  (leftmost, rightmost) <- getBoundaryEntities allInvolvedEntities
+  (leftmost, rightmost) <- return ("", "") -- getBoundaryEntities allInvolvedEntities
   rec (width, text) <- linedText txt xText
       let xText                          = start + (end - start - width) / 2
           start                          = getEntityXPos info leftmost
@@ -340,10 +342,10 @@ addTextWidth :: DrawInfo -> Float -> [EntityName] -> IntermediateT a DrawInfo
 addTextWidth info width entities =
   foldrM (\e acc -> addEntityTo e acc (mempty { width = (0, width / intToFloat (length entities)) })) info entities
 
-drawRequest :: Font a => ReqBlock -> DrawInfo -> (Abs.Request b) -> IntermediateT a (DrawInfo, Stmt)
-drawRequest blocks drawInfo (GroupRequest _ groupTy reqs) = do
-  groupReqs <- mapM (drawLabeledGroupRequest drawInfo blocks) reqs
-  drawGroupRequests blocks drawInfo (toString groupTy) groupReqs
+drawRequest :: Font a => ReqBlock -> DrawInfo -> Abs.Request b -> IntermediateT a (DrawInfo, Stmt)
+-- drawRequest blocks drawInfo (GroupRequest _ groupTy reqs) = do
+--  groupReqs <- mapM (drawLabeledGroupRequest drawInfo blocks) reqs
+--  drawGroupRequests blocks drawInfo (toString groupTy) groupReqs
 drawRequest blocks drawInfo (Abs.Request _ request nesting response) = do
   newNestingBlock        <- updateNestingRequestBlock blocks request
   (reqDrawInfo, reqInfo) <- buildRequest drawInfo (blocks, newNestingBlock) <| Just request
@@ -357,7 +359,7 @@ drawRequest blocks drawInfo (Abs.Request _ request nesting response) = do
   makeReqExpr info (Just req) blocks y = composeComponents info y req blocks
 
 
-  updateNestingRequestBlock :: Font a => ReqBlock -> (BasicRequest b) -> IntermediateT a ReqBlock
+  updateNestingRequestBlock :: Font a => ReqBlock -> BasicRequest b -> IntermediateT a ReqBlock
   updateNestingRequestBlock blocks (BasicRequest _ (RequestEntity req _) (NewBlockArrow _) (RequestEntity res _) _ _) = do
     dir <- computeDirection req res
     return <| Map.insertWith (\_ v -> Just dir : v) res [Nothing] blocks
@@ -404,13 +406,13 @@ getGroupCoordinates info blocks totalWidth = do
   aux info blocks | Map.null (entityInfo info) = do
     scope <- gets scope
     let allInvolvedEntities = Set.toList scope
-    (leftmost, rightmost) <- getBoundaryEntities allInvolvedEntities
+    (leftmost, rightmost) <- return ("", "") -- getBoundaryEntities allInvolvedEntities
     left                  <- addEntityTo leftmost mempty (mempty { width = (blockWidth 10 leftmost L blocks, 0) })
     right                 <- addEntityTo rightmost mempty (mempty { width = (0, blockWidth 10 rightmost R blocks) })
     return (left <> right, (leftmost, rightmost), allInvolvedEntities)
   aux info _ = do
-    allInvolvedEntities   <- getEntityNames info
-    (leftmost, rightmost) <- getBoundaryEntities allInvolvedEntities
+    allInvolvedEntities   <- return [] -- getEntityNames info
+    (leftmost, rightmost) <- return ("", "") -- getBoundaryEntities allInvolvedEntities
     return (info, (leftmost, rightmost), allInvolvedEntities)
 
 drawBoxTitle :: Font a => Float -> String -> IntermediateT a (Float, Expr)
@@ -436,8 +438,8 @@ drawBoxTitle x boxTitle = do
   verticalLine x1 h = mempty { blockProgress = \info height -> (0, makeLine x1 x1 (height - h) height) }
   horizontalLine x1 x2 = mempty { blockProgress = \info height -> (0, makeLine x1 x2 height height) }
 
-drawLabeledGroupRequest
-  :: Font a => DrawInfo -> ReqBlock -> (LabeledGroupRequest b) -> IntermediateT a (DrawInfo, (Float, Expr), Stmt)
+{-drawLabeledGroupRequest
+  :: Font a => DrawInfo -> ReqBlock -> LabeledGroupRequest b -> IntermediateT a (DrawInfo, (Float, Expr), Stmt)
 drawLabeledGroupRequest info blocks (LabeledGroupRequest _ altTxt requests) = do
   txt             <- linedText (wrapInBrachets altTxt) 0
   (altInfo, alts) <- drawStmts info blocks requests
@@ -448,7 +450,7 @@ drawLabeledGroupRequest info blocks (LabeledGroupRequest _ altTxt requests) = do
     wrapTxt s e []       = [s <> e]
     wrapTxt s e [x     ] = [s <> x <> e]
     wrapTxt s e (x : xs) = (s <> x) : wrapTxt "" e xs
-
+-}
 
 composeComponents
   :: Font a => DrawInfo -> Float -> RequestBlock -> (ReqBlock, ReqBlock) -> IntermediateT a (Float, RequestExpr Expr)
@@ -560,8 +562,8 @@ buildRequest info (reqBlocks, resBlocks) (Just (BasicRequest _ (RequestEntity fr
   appendWidth _ width (leftWidth, rightWidth) = (leftWidth, width + rightWidth)
 
   computeEntityWidth l entity block = do
-    next <- nextEntity entity
-    prev <- prevEntity entity
+    next <- return <| Just "" -- nextEntity entity
+    prev <- return <| Just "" -- prevEntity entity
     let nextLeftWidth  = computeWidth next L block
         prevRightWidth = computeWidth prev R block
     return (prevRightWidth + blockWidth 10 entity L block, nextLeftWidth + blockWidth 10 entity R block)
@@ -576,9 +578,9 @@ buildRequest info (reqBlocks, resBlocks) (Just (BasicRequest _ (RequestEntity fr
 computeDirection :: Font a => String -> String -> IntermediateT a ArrowDirection
 computeDirection req res | req == res = return S
 computeDirection req res              = do
-  reqMapping <- previousEntities req
-  resMapping <- previousEntities res
-  return (if null <| resMapping \\ reqMapping then L else R)
+  reqMapping <- return [] -- previousEntities req
+  resMapping <- return [] -- previousEntities res
+  return L  -- (if null <| resMapping \\ reqMapping then L else R)
 
 
 mkArrow :: Font a => Float -> Float -> Float -> Float -> Arrows -> ArrowDirection -> IntermediateT a Expr

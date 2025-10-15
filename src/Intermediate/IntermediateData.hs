@@ -176,18 +176,13 @@ drawJsonValue ObjectScope {..} separator value = do
     JsonString str   -> computeValueFn (wrapInQuote str)
     JsonObject pairs -> do
       let coords =
-            ObjectScope {identation = spaceWidth, x1 = x1, x2 = (identation + x2), y = y, startSymbol = "{", endSymbol = "}"}
+            ObjectScope {identation = spaceWidth, x1 = x1, x2 = identation + x2, y = y, startSymbol = "{", endSymbol = "}"}
       (size, objElem) <- drawItemList coords pairs drawJsonPair separator
       return (size, TextSpan [Attr "y" (AttrFloat y)] [objElem])
     JsonArray array -> do
-      let coords = ObjectScope
-            { identation  = spaceWidth * 2
-            , x1          = x1
-            , x2          = (identation + x2)
-            , y           = y
-            , startSymbol = "["
-            , endSymbol   = "]"
-            }
+      let
+        coords =
+          ObjectScope {identation = spaceWidth * 2, x1 = x1, x2 = identation + x2, y = y, startSymbol = "[", endSymbol = "]"}
       (size, objElem) <- drawItemList coords array drawJsonValue separator
       return (size, TextSpan [Attr "y" (AttrFloat y)] [objElem])
     JsonInteger int                        -> computeValueFn <| show int

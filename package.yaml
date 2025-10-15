@@ -3,8 +3,8 @@ version: 0.1.0.0
 github: "githubuser/diagram"
 license: BSD3
 author: "Gianluca Sant"
-maintainer: "example@example.com"
-copyright: "2020 Gianluca Sant"
+maintainer: "sdrubolandia@gmail.com"
+copyright: "2022 Gianluca Sant"
 
 extra-source-files:
   - README.md
@@ -22,18 +22,18 @@ description: Please see the README on GitHub at <https://github.com/githubuser/d
 dependencies:
   - base >= 4.7 && < 5
   - containers
-  - flow >= 1.0.19
-  - parser-combinators == 1.2.1
-  - parsec == 3.1.14.0
+  - flow >= 2.0.0.4
+  - parser-combinators == 1.3.0
+  - parsec == 3.1.16.1
   - mtl == 2.2.2
-  - extra >= 1.6.19
-  - vector == 0.12.1.2
-  - utility-ht >= 0.0.14
-  - directory == 1.3.6.0
-  - filepath == 1.4.2.1
-  - bytestring == 0.10.10.0
-  - binary == 0.8.7.0
-  - text == 1.2.4.0
+  - extra == 1.7.14
+  - vector == 0.13.1.0
+  - utility-ht >= 0.0.17
+  - directory == 1.3.7.1
+  - filepath == 1.4.2.2
+  - bytestring == 0.11.5.3
+  - binary == 0.8.9.1
+  - text == 2.0.2
   - IfElse
 
 library:
@@ -44,7 +44,7 @@ library:
     - src/Print
     - src/Svg
     - src/Parser
-    - src/Check
+    - src/Analysis
 
 default-extensions:
   - RecordWildCards

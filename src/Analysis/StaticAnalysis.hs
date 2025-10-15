@@ -11,8 +11,9 @@ import qualified Data.List                     as List
 import           AbsFlow                       as Abs
 import           Flow
 import           Debug.Trace
+import           AbsError                      as Err
 
-data Env =
+newtype Env =
    Env
      { activeEntities :: Set.Set String }
 
@@ -21,8 +22,8 @@ type Checker = ExceptT Error (State Env)
 
 emptyEnv = Env {activeEntities = Set.empty}
 
-infoToError :: Info -> String -> Error
-infoToError Info {..} message = Error {row = row, column = column, message = message, src = src}
+infoToError :: ParserInfo -> String -> Error
+infoToError ParserInfo {..} message = Error {row = row, column = column, message = message, src = src}
 
 getActiveParticipants :: Checker (Set.Set String)
 getActiveParticipants = gets activeEntities
@@ -40,18 +41,18 @@ isActiveParticipant entity = do
   active <- gets activeEntities
   return <| Set.member entity active
 
-check :: EntityTable -> Diagram Info -> Either Error (Diagram Info)
-check table diagram = evalState (runExceptT (checkDiagram table diagram)) emptyEnv
+check :: Diagram ParserInfo -> Either Err.Error (Diagram ParserInfo)
+check diagram = evalState (runExceptT (checkDiagram diagram)) emptyEnv
 
-checkDiagram :: EntityTable -> Diagram Info -> Checker (Diagram Info)
-checkDiagram EntityTable {..} diagram@(DiagramRule _ flows) = do
+checkDiagram :: Diagram ParserInfo -> Checker (Diagram ParserInfo)
+checkDiagram diagram@(DiagramRule _ flows) = do
   mapM_ checkStmt flows
   return diagram
 
-checkStmt :: Flow Info -> Checker (Flow Info)
+checkStmt :: Flow ParserInfo -> Checker (Flow ParserInfo)
 checkStmt group@(Group info txt stmts) = do
   activeEntities <- getActiveParticipants
-  when (null stmts && Set.null activeEntities) <| throwError <| infoToError info
+  when (null stmts || Set.null activeEntities) <| throwError <| infoToError info
                                                                             "Group is empty and not participant is defined"
   mapM_ checkStmt stmts
   return group
@@ -85,18 +86,16 @@ checkStmt delay@(Delay info _) = do
   activeEntities <- getActiveParticipants
   when (Set.null activeEntities) <| throwError <| infoToError info "Delay cannot be used when participants are not defined"
   return delay
-checkStmt title@(  Title   _ _) = return title
-checkStmt comment@(Comment _ _) = return comment
-
-checkRequest :: Request Info -> Checker (Request Info)
-checkRequest groupRequest@(GroupRequest info _ reqs) = do
-  groups         <- foldlM (\acc req -> ((<>) acc . extract) <$> checkLabeledGroupRequest req) [] reqs
+checkStmt title@(       Title _ _                         ) = return title
+checkStmt groupRequest@(LabelledGroup info groupType stmts) = do
+  mapM_ checkLabelling stmts
   activeEntities <- getActiveParticipants
-  when (null groups && Set.null activeEntities) <| throwError <| infoToError
+  when (null stmts || null activeEntities) <| throwError <| infoToError
     info
     "Optional group is empty and not participant is defined"
   return groupRequest
-  where extract (LabeledGroupRequest _ _ flows) = flows
+
+checkRequest :: Request ParserInfo -> Checker (Request ParserInfo)
 checkRequest request@(Request _ req1 [] Nothing) = do
   checkBasicRequest req1
   return request
@@ -113,7 +112,7 @@ checkRequest request@(Request info req1 nest (Just req2)) = do
     ("Participant " <> startResponseEntity <> " is not active")
   return request
 
-checkBasicRequest :: BasicRequest Info -> Checker ([String], Info, BasicRequest Info)
+checkBasicRequest :: BasicRequest ParserInfo -> Checker ([String], ParserInfo, BasicRequest ParserInfo)
 checkBasicRequest basic@(BasicRequest info (RequestEntity req _) (NewParticipantArrow _) (RequestEntity res _) _ _) = do
   isResponseActive <- isActiveParticipant res
   when isResponseActive <| throwError <| infoToError info ("Participant " <> res <> " is already active")
@@ -123,7 +122,10 @@ checkBasicRequest basic@(BasicRequest info (RequestEntity req _) _ (RequestEntit
   mapM_ setActiveParticipant [req, res]
   return ([req, res], info, basic)
 
-checkLabeledGroupRequest :: LabeledGroupRequest Info -> Checker (LabeledGroupRequest Info)
-checkLabeledGroupRequest alt@(LabeledGroupRequest _ _ reqs) = do
-  mapM_ checkStmt reqs
-  return alt
+checkLabelling :: Labelling ParserInfo -> Checker (Labelling ParserInfo)
+checkLabelling l@(Labelling _ txt stmts) = do
+  mapM_ checkStmt stmts
+  return l
+
+
+

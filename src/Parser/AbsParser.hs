@@ -1,13 +1,13 @@
 module AbsParser
   ( parseString
   , parseFile
-  , lettersTillDelimiter
-  , parseTillDelimiter
   )
 where
 
 import           AbsData
 import           AbsFlow
+
+import           AbsError
 import qualified Control.Applicative.Combinators
                                                as C
 import           Control.Monad                  ( guard
@@ -18,6 +18,7 @@ import           Data.Char                      ( isSpace )
 import qualified Data.Map                      as M
 import qualified Data.Set                      as S
 import qualified Data.List                     as L
+import           Data.Functor
 import           Debug.Trace
 import           Flow
 import           Text.Parsec
@@ -29,20 +30,19 @@ import           Data.Tuple.HT
 import           Text.Parsec.Char               ( endOfLine )
 import           Data.Bifunctor
 import           Text.ParserCombinators.Parsec.Error
+import           Text.Read                      ( Lexeme(Char) )
+import           Data.String                    ( IsString )
 
-data ParserState = ParserState
-  { fileName :: Maybe String
-  , substMap :: M.Map String String
-  , entityTable :: M.Map String EntityDef
-  , entities :: [EntityName]
-  , blocks :: [String]
-  } deriving (Show)
+
+
+newtype ParserState = ParserState { fileName :: Maybe String } deriving (Show)
 
 type FlowParser a = ParsecT String ParserState IO a
 
+parseError :: ParseError -> Error
 parseError error =
   let position = errorPos error
-  in  AbsFlow.Error
+  in  AbsError.Error
         { src     = sourceName position
         , column  = sourceColumn position
         , row     = sourceLine position
@@ -59,54 +59,41 @@ linedText :: String -> Text
 linedText txt = Text {t = map trim <| lines txt}
 
 processEntity :: String -> FlowParser String
-processEntity entity = do
-  let trimEntity = trim entity
-  entityToProcess <- M.findWithDefault trimEntity trimEntity . substMap <$> getState
-  updateState (addEntityToState entityToProcess)
-  return entityToProcess
-
-addEntityToState :: String -> ParserState -> ParserState
-addEntityToState e t@ParserState {..} = if M.member e entityTable
-  then t
-  else
-    let (old, newTable) =
-          M.insertLookupWithKey (\_ _ o -> o) e EntityDef {name = e, text = linedText e, prevs = entities} entityTable
-    in  ParserState
-          { entityTable = newTable
-          , entities    = if e `L.elem` entities then entities else entities <> [e]
-          , blocks      = blocks
-          , fileName    = fileName
-          , substMap    = substMap
-          }
-
-removeEscapedNewLine []                = []
-removeEscapedNewLine ('\\' : 'n' : xs) = '\n' : removeEscapedNewLine xs
-removeEscapedNewLine (x          : xs) = x : removeEscapedNewLine xs
-
-inLineWhiteSpace :: FlowParser ()
-inLineWhiteSpace = choice [void <| many1 (oneOf " \t") *> inLineWhiteSpace, return ()]
+processEntity entity = return <| trim entity
 
 whiteSpace :: FlowParser ()
 whiteSpace = choice [void <| many1 (oneOf " \t\n") *> whiteSpace, return ()]
 
+quotedString :: FlowParser String
 quotedString = between (char '"') (char '"') (many quotedStringChar)
  where
   quotedStringChar = escapedChar <|> normalChar
   escapedChar      = char '\\' *> oneOf ['\\', '"']
   normalChar       = noneOf "\""
 
+plus :: FlowParser [Char]
 plus = char '+' *> number
 
+number :: FlowParser [Char]
 number = many1 digit
 
+lettersTillDelimiter :: FlowParser a -> FlowParser [Char]
 lettersTillDelimiter p = inLineWhiteSpace *> (removeEscapedNewLine . trim <$> parseTillDelimiter anyChar p) <* whiteSpace
+ where
+  removeEscapedNewLine :: [Char] -> [Char]
+  removeEscapedNewLine []                = []
+  removeEscapedNewLine ('\\' : 'n' : xs) = '\n' : removeEscapedNewLine xs
+  removeEscapedNewLine (x          : xs) = x : removeEscapedNewLine xs
+
+  inLineWhiteSpace :: FlowParser ()
+  inLineWhiteSpace = choice [void <| many1 (oneOf " \t") *> inLineWhiteSpace, return ()]
 
 parseTillDelimiter :: FlowParser a1 -> FlowParser a2 -> FlowParser [a1]
 parseTillDelimiter s p = f
  where
   f =
     do
-        (try <| lookAhead <| void p)
+        try <| lookAhead <| void p
         return []
       <|> do
             c <- s
@@ -123,44 +110,32 @@ foldlP p op f x = foldPAux p op f x <|> return x
       Nothing -> return <| f v x
       _       -> foldlP p op f (f v x)
 
-parseString :: String -> Maybe String -> IO (Either AbsFlow.Error (EntityTable, Diagram Info))
-parseString str scope = first parseError <$> runParserT whileParser emptyState "" str
-  where emptyState = ParserState {entityTable = M.empty, blocks = [], entities = [], fileName = scope, substMap = M.empty}
+parseString :: String -> Maybe String -> IO (Either AbsError.Error (Diagram ParserInfo))
+parseString str scope = first parseError <$> runParserT whileParser emptyState (fromMaybe "" scope) str
+  where emptyState = ParserState {fileName = scope}
 
-parseFile :: String -> IO (Either AbsFlow.Error (EntityTable, Diagram Info))
-parseFile fileName = first parseError <$> parseFileAux emptyState fileName
- where
-  emptyState = ParserState {entityTable = M.empty, blocks = [], entities = [], fileName = Just fileName, substMap = M.empty}
-
-parseFileAux :: ParserState -> String -> IO (Either ParseError (EntityTable, Diagram Info))
-parseFileAux state fileName = do
+parseFile :: String -> IO (Either AbsError.Error (Diagram ParserInfo))
+parseFile fileName = do
   input <- readFile fileName
-  runParserT whileParser (state { fileName = Just fileName }) fileName input
+  parseString input (Just fileName)
 
-whileParser :: FlowParser (EntityTable, Diagram Info)
+whileParser :: FlowParser (Diagram ParserInfo)
 whileParser = whiteSpace >> diagram <* eof
 
-rowInfo :: FlowParser Info
+rowInfo :: FlowParser ParserInfo
 rowInfo = do
   position <- getPosition
-  return Info {src = sourceName position, column = sourceColumn position, row = sourceLine position}
+  return ParserInfo {src = sourceName position, column = sourceColumn position, row = sourceLine position}
 
-diagram :: FlowParser (EntityTable, Diagram Info)
+diagram :: FlowParser (Diagram ParserInfo)
 diagram = do
   info <- rowInfo
-  body <- f
+  skipMany parseComment
+  body <- many $ (whiteSpace <|> parseComment) *> flow <* (whiteSpace <|> parseComment)
   st   <- getState
-  let tableInfo = EntityTable {entitiesMap = entityTable st, allEntities = entities st}
-  return <| (tableInfo, DiagramRule info body)
- where
-  f =
-    do
-        fw  <- whiteSpace *> flow <* whiteSpace
-        fws <- f
-        return (fw : fws)
-      <|> return []
+  return <| DiagramRule info body
 
-flow :: FlowParser (Flow Info)
+flow :: FlowParser (Flow ParserInfo)
 flow =
   participant
     <|> parseGroup
@@ -170,27 +145,18 @@ flow =
     <|> parseInclude
     <|> parseDestroy
     <|> parseSingleRequest
+    <|> parseLabeldGroup
     <|> parseDelay
     <|> parseTitle
-    <|> parseComment
 
+parseTitle :: FlowParser (Flow ParserInfo)
 parseTitle = do
   info <- rowInfo
   try <| string "title"
   v <- lettersTillDelimiter newline
-  return <| Title info <| linedText v
+  return <| Title info <| Text {t = lines v}
 
-header :: FlowParser Head
-header = do
-  string "header for"
-  participant <- lettersTillDelimiter newline
-  string "data"
-  assignments <- whiteSpace *> endBy assignment (char ';') <* whiteSpace
-  string "end data"
-  entityDef <- processEntity participant
-  return <| Head entityDef assignments
-
-parseGroup :: FlowParser (Flow Info)
+parseGroup :: FlowParser (Flow ParserInfo)
 parseGroup = do
   info <- rowInfo
   try (string "group") <* whiteSpace
@@ -200,27 +166,33 @@ parseGroup = do
   whiteSpace
   return <| AbsFlow.Group info label rs
 
-parseComment :: FlowParser (Flow Info)
+parseComment :: FlowParser ()
 parseComment = do
   info <- rowInfo
+  whiteSpace
   try (string "#")
   comment <- lettersTillDelimiter newline
   whiteSpace
-  return <| Comment info comment
+  return ()
 
-parseHeader :: FlowParser (Flow Info)
+parseHeader :: FlowParser (Flow ParserInfo)
 parseHeader = do
   info <- rowInfo
-  try (lookAhead (string "header for"))
-  Header info <$> header
+  try <| string "header for"
+  participant <- lettersTillDelimiter newline
+  string "data"
+  assignments <- whiteSpace *> endBy assignment (char ';') <* whiteSpace
+  string "end data"
+  entityDef <- processEntity participant
+  return (Header info <| Head entityDef assignments)
 
-parseNote :: FlowParser (Flow Info)
+parseNote :: FlowParser (Flow ParserInfo)
 parseNote = do
   info <- rowInfo
   try <| string "note"
   whiteSpace
-  note <- parseNoteOver <|> parseNoteLeftRight
-  return <| uncurry3 (Note info) note
+  (position, entities, txt) <- parseNoteOver <|> parseNoteLeftRight
+  return <| Note info position entities txt
  where
   noteParticipant v = processEntity =<< lettersTillDelimiter (void v)
   noteTxt = do
@@ -232,17 +204,18 @@ parseNote = do
         string "end note"
         return linedTxt
   parseNoteLeftRight = do
-    notePosition <- choice [string "left", string "right"] <* whiteSpace
+    notePosition <- choice [string "left" $> NoteLeft, string "right" $> NoteRight] <* whiteSpace
     string "of"
     entityDef <- noteParticipant <| choice [char ':', endOfLine]
     txt       <- noteTxt
-    return (if notePosition == "left" then NoteLeft else NoteRigth, [entityDef], txt)
+    return (notePosition, [entityDef], txt)
   parseNoteOver = do
     try <| string "over" <* whiteSpace
     e   <- sepBy (noteParticipant <| choice [char ',', char ':', endOfLine]) (char ',')
     txt <- noteTxt
     return (NoteAbove, e, txt)
 
+parseSetValue :: FlowParser (Flow ParserInfo)
 parseSetValue = do
   info <- rowInfo
   try <| string "set"
@@ -250,17 +223,19 @@ parseSetValue = do
   string "to" <* whiteSpace
   SetTo info participant <$> value
 
+includeFile
+  :: String -- ^ 
+  -> M.Map String String -- ^ 
+  -> ParserInfo -- ^ 
+  -> FlowParser (Flow ParserInfo)
 includeFile file subst importInfo = do
   state           <- getState
-  filePathToParse <- liftIO <| toAbsolute (fileName state) file
-  importedDiagram <- liftIO <| parseFileAux (state { substMap = subst }) filePathToParse
+  importedDiagram <- liftIO <| parseFile file
   case importedDiagram of
-    Right (info, DiagramRule _ flow) -> do
-      mapM_ (\e -> updateState <| addEntityToState e) (allEntities info L.\\ entities state)
-      return <| Include importInfo file subst flow
-    Left e -> unexpected <| show e
-  where toAbsolute scope path = if isRelative path then makeAbsolute (maybe "" dropFileName scope <> path) else return path
+    Right (DiagramRule _ flow) -> return <| Include importInfo file subst flow
+    Left  e                    -> unexpected <| show e
 
+parseInclude :: FlowParser (Flow ParserInfo)
 parseInclude = do
   info <- rowInfo
   try <| string "include"
@@ -268,8 +243,13 @@ parseInclude = do
   string "{" <* whiteSpace
   subst <- foldr (uncurry M.insert) M.empty <$> sepBy (substitution <| choice [separator, try <| char '}']) separator
   string "}" <* whiteSpace
-  includeFile p subst info
+  state           <- getState
+  filePathToParse <- liftIO <| toAbsolute (fileName state) p
+  includeFile filePathToParse subst info
  where
+  toAbsolute :: Maybe FilePath -> FilePath -> IO FilePath
+  toAbsolute scope path = if isRelative path then makeAbsolute (maybe "" dropFileName scope <> path) else return path
+  separator :: FlowParser Char
   separator = char ','
   substitution :: FlowParser a -> FlowParser (String, String)
   substitution d = do
@@ -278,6 +258,7 @@ parseInclude = do
     e2 <- lettersTillDelimiter d
     return (e1, e2)
 
+participant :: FlowParser (Flow ParserInfo)
 participant = do
   info <- rowInfo
   try (string "participant")
@@ -292,6 +273,7 @@ participant = do
     string "]"
     return p
 
+parseDestroy :: FlowParser (Flow ParserInfo)
 parseDestroy = do
   info <- rowInfo
   try (string "destroy") <* whiteSpace
@@ -299,6 +281,7 @@ parseDestroy = do
   entity <- processEntity e
   return <| Destroy info entity
 
+parseDelay :: FlowParser (Flow ParserInfo)
 parseDelay = do
   info <- rowInfo
   try (string "...")
@@ -306,21 +289,21 @@ parseDelay = do
   string "..."
   return <| Delay info txt
 
+parseLabeldGroup :: FlowParser (Flow ParserInfo)
+parseLabeldGroup = do
+  info               <- rowInfo
+  (groupType, flows) <- alternativeGroup <|> optionalGroup <|> loopGroup
+  return <| LabelledGroup info groupType flows
+
+parseSingleRequest :: FlowParser (Flow ParserInfo)
 parseSingleRequest = do
   info <- rowInfo
-  reqs <- request
+  reqs <- parseRequest
   return <| Requests info reqs
 
+fromRequestParticipant :: FlowParser [Char]
 fromRequestParticipant =
   lettersTillDelimiter (choice [void <| try (char '['), void <| try allArrows, void <| try (char '\n')])
-
-flowRequests :: FlowParser [Flow Info]
-flowRequests = manyTill (whiteSpace *> flow <* whiteSpace) (try (lookAhead <| startCloseArrow)) <|> return []
- where
-  startCloseArrow = do
-    fromRequestParticipant
-    whiteSpace *> jsFunction
-    closeBlockArrow
 
 jsEntity :: FlowParser String
 jsEntity =
@@ -330,50 +313,45 @@ jsEntity =
       return (l : ls)
     <|> return []
 
-request :: FlowParser (Request Info)
-request = alternativeRequest <|> optionalRequest <|> loopRequest <|> parseRequest
-
-optionalRequest :: FlowParser (Request Info)
-optionalRequest = do
-  alternativeInfo <- rowInfo
+optionalGroup :: FlowParser (GroupType, [Labelling ParserInfo])
+optionalGroup = do
   try <| string "opt"
   whiteSpace
   optional <- labeledGroupRequest "end"
   whiteSpace
-  return <| GroupRequest alternativeInfo Optional [optional]
+  return (Optional, [optional])
 
-loopRequest :: FlowParser (Request Info)
-loopRequest = do
-  alternativeInfo <- rowInfo
+loopGroup :: FlowParser (GroupType, [Labelling ParserInfo])
+loopGroup = do
   try <| string "loop"
   whiteSpace
   loop <- labeledGroupRequest "end"
   whiteSpace
-  return <| GroupRequest alternativeInfo Loop [loop]
+  return (Loop, [loop])
 
-alternativeRequest :: FlowParser (Request Info)
-alternativeRequest = do
-  alternativeInfo <- rowInfo
+alternativeGroup :: FlowParser (GroupType, [Labelling ParserInfo])
+alternativeGroup = do
   try <| string "alt"
   whiteSpace
   thenAlternative <- labeledGroupRequest "else"
   whiteSpace
   elseAlternative <- labeledGroupRequest "end"
   whiteSpace
-  return <| GroupRequest alternativeInfo Alternative [thenAlternative, elseAlternative]
+  return (Alternative, [thenAlternative, elseAlternative])
 
+labeledGroupRequest :: String -> FlowParser (Labelling ParserInfo)
 labeledGroupRequest str = do
-  altInfo     <- rowInfo
+  info        <- rowInfo
   altLabel    <- linedText <$> lettersTillDelimiter newline
   altRequests <- manyTill (whiteSpace *> flow <* whiteSpace) (try (lookAhead <| string str)) <|> return []
   string str
-  return <| LabeledGroupRequest altInfo altLabel altRequests
+  return <| Labelling info altLabel altRequests
 
-parseRequest :: FlowParser (Request Info)
+parseRequest :: FlowParser (Request ParserInfo)
 parseRequest =
   do
       requestInfo <- rowInfo
-      r1          <- try <| requestUnit openBlockArrow
+      r1          <- try <| requestUnit startBlockArrow
       requests    <- whiteSpace *> flowRequests <* whiteSpace
       r2          <- requestUnit closeBlockArrow
       return <| AbsFlow.Request requestInfo r1 requests (Just r2)
@@ -381,27 +359,35 @@ parseRequest =
           requestInfo <- rowInfo
           r1          <- try <| requestUnit arrows
           return <| AbsFlow.Request requestInfo r1 [] Nothing
+ where
+  flowRequests :: FlowParser [Flow ParserInfo]
+  flowRequests = manyTill (whiteSpace *> flow <* whiteSpace) (try (lookAhead <| startCloseArrow)) <|> return []
+   where
+    startCloseArrow = do
+      fromRequestParticipant
+      whiteSpace *> jsFunction
+      closeBlockArrow
 
-requestUnit :: FlowParser Arrows -> FlowParser (BasicRequest Info)
-requestUnit arrow = do
-  basicRequestInfo <- rowInfo
-  p1               <- fromRequestParticipant
-  js1              <- whiteSpace *> jsFunction
-  arrow_ty         <- arrow
-  p2               <- lettersTillDelimiter <| choice [void <| try (char '['), void <| try (char ':')]
-  js2              <- whiteSpace *> jsFunction
-  string ":"
-  annotation_1 <- lettersTillDelimiter newline
-  d            <- requestData <* whiteSpace
-  entityDef1   <- processEntity p1
-  entityDef2   <- processEntity p2
-  return
-    <| BasicRequest basicRequestInfo
-                    (RequestEntity entityDef1 js1)
-                    arrow_ty
-                    (RequestEntity entityDef2 js2)
-                    (linedText annotation_1)
-                    d
+  requestUnit :: FlowParser Arrows -> FlowParser (BasicRequest ParserInfo)
+  requestUnit arrow = do
+    basicRequestInfo <- rowInfo
+    p1               <- fromRequestParticipant
+    js1              <- whiteSpace *> jsFunction
+    arrow_ty         <- arrow
+    p2               <- lettersTillDelimiter <| choice [void <| try (char '['), void <| try (char ':')]
+    js2              <- whiteSpace *> jsFunction
+    string ":"
+    annotation_1 <- lettersTillDelimiter newline
+    d            <- requestData <* whiteSpace
+    entityDef1   <- processEntity p1
+    entityDef2   <- processEntity p2
+    return
+      <| BasicRequest basicRequestInfo
+                      (RequestEntity entityDef1 js1)
+                      arrow_ty
+                      (RequestEntity entityDef2 js2)
+                      (linedText annotation_1)
+                      d
 
 jsFunction :: FlowParser (Maybe String)
 jsFunction =
@@ -416,19 +402,36 @@ requestData :: FlowParser (Maybe RequestData)
 requestData =
   do
       try <| string "data" <* whiteSpace
+      string "application/"
       d <- parseJson <|> parseFormEncoded
       string "end data"
       return (Just d)
     <|> return Nothing
  where
+  parseFormEncoded :: FlowParser RequestData
   parseFormEncoded = do
-    string "application/x-www-form-urlencoded"
+    string "x-www-form-urlencoded"
     Form <$> (whiteSpace *> listAssignment <* whiteSpace)
+
+  parseJson :: FlowParser RequestData
   parseJson = do
-    try $ string "application/json"
+    try $ string "json"
     Json <$> (whiteSpace *> jsonValue <* whiteSpace)
 
+allArrows :: FlowParser Arrows
 allArrows = try openBlockArrow <|> try closeBlockArrow <|> try arrow
+
+startBlockArrow :: FlowParser Arrows
+startBlockArrow = try openNewParticipanBlockArrow <|> openBlockArrow
+
+openNewParticipanBlockArrow :: FlowParser Arrows
+openNewParticipanBlockArrow =
+  do
+      try <| string "-->*+"
+      return <| NewParticipantBlockArrow Dash
+    <|> do
+          string "->*+"
+          return <| NewParticipantBlockArrow Thick
 
 openBlockArrow :: FlowParser Arrows
 openBlockArrow =
